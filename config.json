@@ -1,0 +1,11 @@
+{
+  "source": {
+    "type": "youtube",
+    "url": "https://www.youtube.com/watch?v=TsgoxkRFit0",
+    "description": "SUMMIT One Vanderbilt (New York City, NY)",
+    "publisher": "EarthCam"
+  },
+  "cache": {
+    "ttlMinutes": 5
+  }
+}
