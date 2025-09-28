@@ -314,10 +314,18 @@ async function updateCacheFiles() {
 }
 
 async function getCachedData() {
-  // If files don't exist at all, we must wait for initial generation
+  // If files don't exist at all, trigger background generation but don't wait
   if (!filesExist()) {
-    console.log("No cached files found, generating initial cache...");
-    await updateCacheFiles();
+    console.log(
+      "No cached files found, generating initial cache in background..."
+    );
+    // Start cache generation in background without waiting
+    updateCacheFiles().catch((err) => {
+      console.error("Background initial cache generation failed:", err);
+    });
+
+    // Throw error - no data available yet
+    throw new Error("Cache is being generated, please try again in a moment");
   } else {
     // Files exist - check if TTL expired and trigger background update if needed
     if (isCacheExpired()) {
