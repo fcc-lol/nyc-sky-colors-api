@@ -79,7 +79,7 @@ async function getFrameData() {
   }
 }
 
-async function getCroppedSection(imageBuffer, x, y, width = 100, height = 100) {
+async function getCroppedSection(imageBuffer, x, y, width = 300, height = 300) {
   return await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
       "-y",
@@ -258,8 +258,8 @@ async function updateCacheFiles() {
     console.log(`Video dimensions: ${width}x${height}`);
 
     // Step 3: Calculate positions for crops
-    const middleX = Math.floor((width - 100) / 2);
-    const rightX = width - 100;
+    const middleX = Math.floor((width - 300) / 2) - 100;
+    const rightX = width - 300;
 
     // Step 4: Crop three sections from the single image
     console.log("Creating crops from single image...");
