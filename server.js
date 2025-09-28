@@ -476,6 +476,7 @@ app.get("/", async (req, res) => {
             height: 12rem;
             border-radius: 1rem;
             margin: 0 auto 1rem auto;
+            background-color: #e0e0e0;
         }
         .color-label {
             font-size: 1rem;
@@ -491,6 +492,7 @@ app.get("/", async (req, res) => {
             margin: 1rem 0 0.75rem 0;
             font-size: 2rem;
             text-transform: uppercase;
+            min-height: 2.4rem;
         }
         .timestamp-info {
             font-size: 1rem;
