@@ -496,7 +496,7 @@ app.get("/", async (req, res) => {
         }
         .timestamp-info {
             font-size: 1rem;
-            padding: 1rem 0;
+            padding: 0.5rem 0 2rem 0;
             color: #666;
         }
     </style>
@@ -560,7 +560,7 @@ app.get("/", async (req, res) => {
                 
                 // Update timestamp info
                 document.getElementById('timestamp-display').textContent = 
-                    'Last updated ' + data.metadata.lastUpdated.formatted + ' (' + data.metadata.cacheAge.formatted + ' ago)';
+                    data.metadata.lastUpdated.formatted;
             } catch (error) {
                 console.error('Error loading colors:', error);
             }
