@@ -1,0 +1,9 @@
+{
+  "service_id": "nyc-sky-colors",
+  "service_name": "NYC Sky Colors",
+  "domain": "https://nyc-sky-colors.fcc.lol",
+  "host": "localhost",
+  "port": "3113",
+  "author": "fcc",
+  "created_on": "Sun Sep 28 19:17:37 UTC 2025"
+}
