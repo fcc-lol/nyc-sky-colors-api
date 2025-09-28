@@ -439,7 +439,7 @@ app.get("/", async (req, res) => {
             margin: 0;
             padding: 1.25rem;
             background-color: #f0f0f0;
-            min-height: 100vh;
+            min-height: calc(100vh - 2.5rem);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -451,7 +451,7 @@ app.get("/", async (req, res) => {
             justify-content: center;
             max-width: 50rem;
             text-align: center;
-            padding-bottom: 5rem;
+            padding-bottom: 2rem;
         }
         h1 {
             color: #333;
@@ -499,6 +499,22 @@ app.get("/", async (req, res) => {
             padding: 0.5rem 0 2rem 0;
             color: #666;
         }
+        .source-link {
+            margin-top: 2rem;
+            text-align: center;
+        }
+        .source-link a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.75rem;
+            border-bottom: 0.125rem solid #ccc;
+            padding-bottom: 0.125rem;
+            text-transform: uppercase;
+        }
+        .source-link a:hover {
+            color: #333;
+            border-bottom-color: #333;
+        }
     </style>
 </head>
 <body>
@@ -529,6 +545,9 @@ app.get("/", async (req, res) => {
                     <div class="hex-code" id="northeast-hex"></div>
                 </div>
             </div>
+        </div>
+        <div class="source-link">
+            <a href="#" id="source-url" target="_blank" rel="noopener">View source</a>
         </div>
     </div>
 
@@ -561,6 +580,9 @@ app.get("/", async (req, res) => {
                 // Update timestamp info
                 document.getElementById('timestamp-display').textContent = 
                     data.metadata.lastUpdated.formatted;
+                
+                // Update source link
+                document.getElementById('source-url').href = data.metadata.source.url;
             } catch (error) {
                 console.error('Error loading colors:', error);
             }
