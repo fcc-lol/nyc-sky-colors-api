@@ -510,21 +510,21 @@ app.get("/", async (req, res) => {
                 <div class="color-info">
                     <div class="color-swatch" id="northwest-swatch"></div>
                     <div class="color-label">Northwest</div>
-                    <div class="hex-code" id="northwest-hex">#000000</div>
+                    <div class="hex-code" id="northwest-hex"></div>
                 </div>
             </div>
             <div class="card">
                 <div class="color-info">
                     <div class="color-swatch" id="north-swatch"></div>
                     <div class="color-label">North</div>
-                    <div class="hex-code" id="north-hex">#000000</div>
+                    <div class="hex-code" id="north-hex"></div>
                 </div>
             </div>
             <div class="card">
                 <div class="color-info">
                     <div class="color-swatch" id="northeast-swatch"></div>
                     <div class="color-label">Northeast</div>
-                    <div class="hex-code" id="northeast-hex">#000000</div>
+                    <div class="hex-code" id="northeast-hex"></div>
                 </div>
             </div>
         </div>
