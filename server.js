@@ -505,7 +505,7 @@ app.get("/", async (req, res) => {
     <div class="container">
         <h1>NEW YORK CITY SKY COLORS</h1>
         <div class="timestamp-info">
-            <span id="timestamp-display">Loading...</span>
+            <span id="timestamp-display">Checking the sky...</span>
         </div>
         <div class="grid">
             <div class="card">
