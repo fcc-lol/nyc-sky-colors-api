@@ -319,25 +319,27 @@ async function getCachedData() {
     console.log("No cached files found, generating initial cache...");
     await updateCacheFiles();
   } else {
-    // Files exist - check if they need updating and do it in background
+    // Files exist - check if TTL expired and trigger background update if needed
     if (isCacheExpired()) {
       console.log(
-        "Cache expired, triggering background update (serving stale data)"
+        "Cache TTL expired, triggering background update (serving cached data immediately)"
       );
-      // Update in background without waiting
+      // Update in background without waiting - don't block the response
       updateCacheFiles().catch((err) => {
         console.error("Background update failed:", err);
       });
+    } else {
+      console.log("Cache still fresh, serving cached data");
     }
   }
 
-  // Always return current cached data immediately (even if stale)
+  // Always return current cached data immediately (even if expired/stale)
   const metadata = getMetadata();
   if (!metadata) {
     throw new Error("No metadata available");
   }
 
-  // Read image files and convert to base64
+  // Read image files
   const northwestCrop = fs.readFileSync(path.join(dataDir, "crop-left.png"));
   const northCrop = fs.readFileSync(path.join(dataDir, "crop-middle.png"));
   const northeastCrop = fs.readFileSync(path.join(dataDir, "crop-right.png"));
