@@ -702,7 +702,7 @@ app.get("/", async (req, res) => {
         <div class="timestamp-info">
             <span id="timestamp-display">Checking the sky...</span>
             <div class="countdown-timer">
-                <span id="countdown-display">Calculating...</span>
+                <span id="countdown-display">Next update in 15 minutes</span>
             </div>
         </div>
         <div class="grid">
