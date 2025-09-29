@@ -923,7 +923,7 @@ app.get("/", async (req, res) => {
 });
 
 // Debug endpoint to get the latest full frame image
-app.get("/debug/latest-image", async (req, res) => {
+app.get("/debug/image", async (req, res) => {
   try {
     console.log("Getting latest full frame image for debug...");
     const imageBuffer = await getFrameData();
