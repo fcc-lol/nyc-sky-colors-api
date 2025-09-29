@@ -829,7 +829,7 @@ app.get("/", async (req, res) => {
             if (milliseconds <= 0) return "overdue";
             
             const totalSeconds = Math.floor(milliseconds / 1000);
-            const minutes = Math.round(totalSeconds / 60);
+            const minutes = Math.ceil(totalSeconds / 60);
             
             if (minutes > 0) {
                 return 'Next update in ' + minutes + ' minute' + (minutes !== 1 ? 's' : '');
