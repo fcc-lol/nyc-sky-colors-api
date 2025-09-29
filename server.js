@@ -844,6 +844,70 @@ app.get("/", async (req, res) => {
   }
 });
 
+// Debug endpoint to get the latest full frame image
+app.get("/debug/latest-image", async (req, res) => {
+  try {
+    console.log("Getting latest full frame image for debug...");
+    const imageBuffer = await getFrameData();
+
+    res.set({
+      "Content-Type": "image/png",
+      "Content-Length": imageBuffer.length
+    });
+
+    res.send(imageBuffer);
+  } catch (error) {
+    console.error("Debug latest image error:", error);
+    res.status(500).json({
+      error: "Failed to get latest image",
+      message: error.message
+    });
+  }
+});
+
+// Debug endpoint to get cropped sections
+app.get("/debug/crop/:direction", async (req, res) => {
+  try {
+    const direction = req.params.direction;
+    const validDirections = ["west", "north-west", "north-east", "east"];
+
+    if (!validDirections.includes(direction)) {
+      return res.status(400).json({
+        error: "Invalid direction",
+        message: `Direction must be one of: ${validDirections.join(", ")}`
+      });
+    }
+
+    console.log(`Getting cropped section for ${direction}...`);
+
+    // Get the full frame image first
+    const imageBuffer = await getFrameData();
+
+    // Get crop coordinates from config
+    const cropCoordinates = config.crops.coordinates[direction];
+
+    // Create the cropped section
+    const croppedBuffer = await getCroppedSection(
+      imageBuffer,
+      cropCoordinates.x,
+      cropCoordinates.y
+    );
+
+    res.set({
+      "Content-Type": "image/png",
+      "Content-Length": croppedBuffer.length
+    });
+
+    res.send(croppedBuffer);
+  } catch (error) {
+    console.error(`Debug crop ${req.params.direction} error:`, error);
+    res.status(500).json({
+      error: "Failed to get cropped image",
+      message: error.message
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });
