@@ -865,6 +865,82 @@ app.get("/debug/latest-image", async (req, res) => {
   }
 });
 
+// Debug endpoint to show full image with crop areas outlined
+app.get("/debug/overlay", async (req, res) => {
+  try {
+    console.log("Getting full frame image with crop overlays...");
+
+    // Get the full frame image first
+    const imageBuffer = await getFrameData();
+
+    // Get crop coordinates and dimensions from config
+    const cropCoordinates = config.crops.coordinates;
+    const cropWidth = config.crops.dimensions.width;
+    const cropHeight = config.crops.dimensions.height;
+
+    // Create overlay using ffmpeg with drawbox filter
+    const overlayBuffer = await new Promise((resolve, reject) => {
+      // Build the drawbox filter string for all crop areas
+      const drawboxFilters = Object.entries(cropCoordinates)
+        .map(([direction, coords]) => {
+          return `drawbox=x=${coords.x}:y=${coords.y}:w=${cropWidth}:h=${cropHeight}:color=black@0.5:t=4`;
+        })
+        .join(",");
+
+      const ffmpeg = spawn("ffmpeg", [
+        "-y",
+        "-f",
+        "image2pipe",
+        "-i",
+        "pipe:0", // read from stdin
+        "-vf",
+        drawboxFilters, // apply all drawbox filters
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "png",
+        "pipe:1"
+      ]);
+
+      let chunks = [];
+
+      ffmpeg.stdout.on("data", (chunk) => {
+        chunks.push(chunk);
+      });
+
+      ffmpeg.stderr.on("data", (err) => {
+        // ffmpeg logs to stderr, uncomment if debugging
+        // console.error("ffmpeg overlay:", err.toString());
+      });
+
+      ffmpeg.on("close", (code) => {
+        if (code === 0) {
+          resolve(Buffer.concat(chunks));
+        } else {
+          reject(new Error(`ffmpeg overlay exited with ${code}`));
+        }
+      });
+
+      // Write the image buffer to ffmpeg's stdin
+      ffmpeg.stdin.write(imageBuffer);
+      ffmpeg.stdin.end();
+    });
+
+    res.set({
+      "Content-Type": "image/png",
+      "Content-Length": overlayBuffer.length
+    });
+
+    res.send(overlayBuffer);
+  } catch (error) {
+    console.error("Debug overlay error:", error);
+    res.status(500).json({
+      error: "Failed to create overlay image",
+      message: error.message
+    });
+  }
+});
+
 // Debug endpoint to get cropped sections
 app.get("/debug/crop/:direction", async (req, res) => {
   try {

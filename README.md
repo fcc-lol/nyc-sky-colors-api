@@ -18,6 +18,7 @@ Created: Sun Sep 28 19:17:37 UTC 2025
 ### Debug Endpoints
 
 - `/debug/latest-image` - View the latest full frame image from the stream
+- `/debug/overlay` - View the full image with crop areas outlined (transparent black borders)
 - `/debug/crop/west` - View the west crop section
 - `/debug/crop/north-west` - View the north-west crop section
 - `/debug/crop/north-east` - View the north-east crop section
