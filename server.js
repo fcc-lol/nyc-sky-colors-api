@@ -164,11 +164,25 @@ function getLatestColorData() {
         const filePath = path.join(dateFolderPath, latestTimeFile);
         const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-        // Create timestamp from date folder and time filename
+        // Create timestamp from date folder and time filename (NYC timezone)
         const dateStr = dateFolder; // YYYY-MM-DD
         const timeStr = latestTimeFile.replace(".json", "").replace("-", ":"); // HH:MM
-        // Parse as NYC time - assume the stored date/time is already in NYC timezone
-        const timestamp = new Date(`${dateStr}T${timeStr}:00`).getTime();
+
+        // Create a date string in NYC timezone and convert to timestamp
+        const nycDateTimeStr = `${dateStr} ${timeStr}:00`;
+        const nycDate = new Date(nycDateTimeStr);
+
+        // Get the timezone offset for NYC at this date
+        const tempNycDate = new Date(
+          nycDate.toLocaleString("en-US", { timeZone: "America/New_York" })
+        );
+        const tempUtcDate = new Date(
+          nycDate.toLocaleString("en-US", { timeZone: "UTC" })
+        );
+        const timezoneOffset = tempUtcDate.getTime() - tempNycDate.getTime();
+
+        // Adjust the timestamp to account for NYC timezone
+        const timestamp = nycDate.getTime() + timezoneOffset;
 
         return {
           colors: data,
