@@ -1,8 +1,12 @@
 import express from "express";
-import { execSync, spawn } from "child_process";
+import { execSync, spawn, exec } from "child_process";
 import fs from "fs";
+import { promises as fsPromises } from "fs";
 import path from "path";
 import cors from "cors";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Load configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
@@ -33,18 +37,22 @@ app.use("/data", express.static(dataDir));
 async function getFrameData() {
   try {
     // Step 1: Get direct video URL from yt-dlp
-    const videoUrl = execSync(`yt-dlp -g "${config.source.url}"`, {
-      encoding: "utf8"
-    }).trim();
+    const { stdout: videoUrl } = await execAsync(
+      `yt-dlp -g "${config.source.url}"`,
+      {
+        encoding: "utf8"
+      }
+    );
+    const trimmedVideoUrl = videoUrl.trim();
 
-    console.log("Video stream URL:", videoUrl);
+    console.log("Video stream URL:", trimmedVideoUrl);
 
     // Step 2: Run ffmpeg to capture one frame and pipe raw image data to stdout
     return await new Promise((resolve, reject) => {
       const ffmpeg = spawn("ffmpeg", [
         "-y",
         "-i",
-        videoUrl,
+        trimmedVideoUrl,
         "-vframes",
         "1",
         "-f",
@@ -241,11 +249,15 @@ async function updateCacheFiles() {
     console.log("Got full frame buffer:", imageBuffer.length, "bytes");
 
     // Step 2: Get video dimensions to calculate crop positions
-    const videoUrl = execSync(`yt-dlp -g "${config.source.url}"`, {
-      encoding: "utf8"
-    }).trim();
+    const { stdout: videoUrlOutput } = await execAsync(
+      `yt-dlp -g "${config.source.url}"`,
+      {
+        encoding: "utf8"
+      }
+    );
+    const videoUrl = videoUrlOutput.trim();
 
-    const videoInfo = execSync(
+    const { stdout: videoInfo } = await execAsync(
       `ffprobe -v quiet -print_format json -show_streams "${videoUrl}"`,
       { encoding: "utf8" }
     );
@@ -348,9 +360,11 @@ async function getCachedData() {
   }
 
   // Read image files
-  const northwestCrop = fs.readFileSync(path.join(dataDir, "crop-left.png"));
-  const northCrop = fs.readFileSync(path.join(dataDir, "crop-middle.png"));
-  const northeastCrop = fs.readFileSync(path.join(dataDir, "crop-right.png"));
+  const [northwestCrop, northCrop, northeastCrop] = await Promise.all([
+    fsPromises.readFile(path.join(dataDir, "crop-left.png")),
+    fsPromises.readFile(path.join(dataDir, "crop-middle.png")),
+    fsPromises.readFile(path.join(dataDir, "crop-right.png"))
+  ]);
 
   return {
     northwestCrop,
