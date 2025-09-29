@@ -648,7 +648,7 @@ app.get("/", async (req, res) => {
 		#countdown {
 			font-size: 0.875rem;
 			color: #888;
-			min-height: 1rem;
+			min-height: 1.125rem;
 		}
 
 		#grid {
