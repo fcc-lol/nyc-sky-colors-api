@@ -5,7 +5,16 @@
     "description": "SUMMIT One Vanderbilt (New York City, NY)",
     "publisher": "EarthCam"
   },
-  "cache": {
-    "ttlMinutes": 5
+  "crops": {
+    "dimensions": {
+      "width": 200,
+      "height": 200
+    },
+    "coordinates": {
+      "west": { "x": 144, "y": 253 },
+      "north-west": { "x": 730, "y": 229 },
+      "north-east": { "x": 1152, "y": 237 },
+      "east": { "x": 1700, "y": 261 }
+    }
   }
 }

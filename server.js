@@ -11,10 +11,6 @@ const execAsync = promisify(exec);
 // Load configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
-// File-based cache configuration
-const CACHE_TTL = config.cache.ttlMinutes * 60 * 1000; // Convert minutes to milliseconds
-const METADATA_FILE = path.join(process.cwd(), "data", "metadata.json");
-
 // Track if an update is currently in progress
 let updateInProgress = false;
 
@@ -30,9 +26,6 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir);
   console.log("Created data directory");
 }
-
-// Serve static files from data directory
-app.use("/data", express.static(dataDir));
 
 async function getFrameData() {
   try {
@@ -87,7 +80,13 @@ async function getFrameData() {
   }
 }
 
-async function getCroppedSection(imageBuffer, x, y, width = 300, height = 300) {
+async function getCroppedSection(
+  imageBuffer,
+  x,
+  y,
+  width = config.crops.dimensions.width,
+  height = config.crops.dimensions.height
+) {
   return await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
       "-y",
@@ -129,55 +128,60 @@ async function getCroppedSection(imageBuffer, x, y, width = 300, height = 300) {
   });
 }
 
-async function saveImageToFile(imageBuffer, filename) {
+function getLatestColorData() {
   try {
-    const filePath = path.join(dataDir, filename);
-    fs.writeFileSync(filePath, imageBuffer);
-    console.log(`Saved ${filename} to data folder`);
-  } catch (error) {
-    console.error(`Error saving ${filename}:`, error);
-  }
-}
+    // Get all date folders and sort by newest first
+    const dateFolders = fs
+      .readdirSync(dataDir)
+      .filter((item) => {
+        const itemPath = path.join(dataDir, item);
+        return (
+          fs.statSync(itemPath).isDirectory() &&
+          /^\d{4}-\d{2}-\d{2}$/.test(item)
+        );
+      })
+      .sort((a, b) => b.localeCompare(a)); // Sort dates descending
 
-function getMetadata() {
-  try {
-    if (fs.existsSync(METADATA_FILE)) {
-      const data = fs.readFileSync(METADATA_FILE, "utf8");
-      return JSON.parse(data);
+    if (dateFolders.length === 0) {
+      return null;
     }
+
+    // Look through date folders starting with the most recent
+    for (const dateFolder of dateFolders) {
+      const dateFolderPath = path.join(dataDir, dateFolder);
+
+      // Get all time files in this date folder
+      const timeFiles = fs
+        .readdirSync(dateFolderPath)
+        .filter(
+          (file) => file.endsWith(".json") && /^\d{2}-\d{2}\.json$/.test(file)
+        )
+        .sort((a, b) => b.localeCompare(a)); // Sort times descending
+
+      if (timeFiles.length > 0) {
+        // Read the most recent time file
+        const latestTimeFile = timeFiles[0];
+        const filePath = path.join(dateFolderPath, latestTimeFile);
+        const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+        // Create timestamp from date folder and time filename
+        const dateStr = dateFolder; // YYYY-MM-DD
+        const timeStr = latestTimeFile.replace(".json", "").replace("-", ":"); // HH:MM
+        // Parse as NYC time - assume the stored date/time is already in NYC timezone
+        const timestamp = new Date(`${dateStr}T${timeStr}:00`).getTime();
+
+        return {
+          colors: data,
+          timestamp
+        };
+      }
+    }
+
+    return null;
   } catch (error) {
-    console.error("Error reading metadata:", error);
+    console.error("Error reading color data:", error);
+    return null;
   }
-  return null;
-}
-
-function saveMetadata(metadata) {
-  try {
-    fs.writeFileSync(METADATA_FILE, JSON.stringify(metadata, null, 2));
-    console.log("Metadata saved");
-  } catch (error) {
-    console.error("Error saving metadata:", error);
-  }
-}
-
-function isCacheExpired() {
-  const metadata = getMetadata();
-  if (!metadata || !metadata.lastUpdated) {
-    return true;
-  }
-  const now = Date.now();
-  const age = now - metadata.lastUpdated;
-  return age > CACHE_TTL;
-}
-
-function filesExist() {
-  const requiredFiles = [
-    "full.png",
-    "crop-left.png",
-    "crop-middle.png",
-    "crop-right.png"
-  ];
-  return requiredFiles.every((file) => fs.existsSync(path.join(dataDir, file)));
 }
 
 async function getDominantColor(imageBuffer) {
@@ -269,52 +273,87 @@ async function updateCacheFiles() {
 
     console.log(`Video dimensions: ${width}x${height}`);
 
-    // Step 3: Calculate positions for crops
-    const middleX = Math.floor((width - 300) / 2) - 100;
-    const rightX = width - 300;
+    // Step 3: Get crop coordinates from config
+    const cropCoordinates = config.crops.coordinates;
 
-    // Step 4: Crop three sections from the single image
+    // Step 4: Crop four sections from the single image
     console.log("Creating crops from single image...");
-    const [northwestCrop, northCrop, northeastCrop] = await Promise.all([
-      getCroppedSection(imageBuffer, 0, 0), // top-left
-      getCroppedSection(imageBuffer, middleX, 0), // top-middle
-      getCroppedSection(imageBuffer, rightX, 0) // top-right
-    ]);
+    const [westCrop, northWestCrop, northEastCrop, eastCrop] =
+      await Promise.all([
+        getCroppedSection(
+          imageBuffer,
+          cropCoordinates.west.x,
+          cropCoordinates.west.y
+        ),
+        getCroppedSection(
+          imageBuffer,
+          cropCoordinates["north-west"].x,
+          cropCoordinates["north-west"].y
+        ),
+        getCroppedSection(
+          imageBuffer,
+          cropCoordinates["north-east"].x,
+          cropCoordinates["north-east"].y
+        ),
+        getCroppedSection(
+          imageBuffer,
+          cropCoordinates.east.x,
+          cropCoordinates.east.y
+        )
+      ]);
 
     console.log("All crops completed, extracting colors...");
 
     // Step 5: Extract dominant colors from each crop
-    const [northwestColor, northColor, northeastColor] = await Promise.all([
-      getDominantColor(northwestCrop),
-      getDominantColor(northCrop),
-      getDominantColor(northeastCrop)
-    ]);
+    const [westColor, northWestColor, northEastColor, eastColor] =
+      await Promise.all([
+        getDominantColor(westCrop),
+        getDominantColor(northWestCrop),
+        getDominantColor(northEastCrop),
+        getDominantColor(eastCrop)
+      ]);
 
     console.log("Colors extracted:", {
-      northwestColor,
-      northColor,
-      northeastColor
+      westColor,
+      northWestColor,
+      northEastColor,
+      eastColor
     });
 
-    // Step 6: Save images to disk (replace previous versions)
-    console.log("Saving images to disk...");
-    await Promise.all([
-      saveImageToFile(imageBuffer, "full.png"),
-      saveImageToFile(northwestCrop, "crop-left.png"),
-      saveImageToFile(northCrop, "crop-middle.png"),
-      saveImageToFile(northeastCrop, "crop-right.png")
-    ]);
+    // Step 6: Save timestamped JSON file with colors
+    const now = new Date();
+    const nycTime = new Date(
+      now.toLocaleString("en-US", { timeZone: "America/New_York" })
+    );
+    const dateFolder =
+      nycTime.getFullYear() +
+      "-" +
+      String(nycTime.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(nycTime.getDate()).padStart(2, "0"); // YYYY-MM-DD in NYC time
+    const timeFilename =
+      String(nycTime.getHours()).padStart(2, "0") +
+      "-" +
+      String(nycTime.getMinutes()).padStart(2, "0") +
+      ".json"; // HH-MM.json in NYC time
 
-    // Step 7: Save metadata with colors and timestamp
-    const metadata = {
-      lastUpdated: Date.now(),
-      colors: {
-        northwestColor,
-        northColor,
-        northeastColor
-      }
+    const colorData = {
+      west: westColor,
+      "north-west": northWestColor,
+      "north-east": northEastColor,
+      east: eastColor
     };
-    saveMetadata(metadata);
+
+    // Create date folder if it doesn't exist
+    const dateFolderPath = path.join(dataDir, dateFolder);
+    if (!fs.existsSync(dateFolderPath)) {
+      fs.mkdirSync(dateFolderPath, { recursive: true });
+      console.log(`Created date folder: ${dateFolder}`);
+    }
+
+    const filePath = path.join(dateFolderPath, timeFilename);
+    fs.writeFileSync(filePath, JSON.stringify(colorData, null, 2));
+    console.log(`Saved color data to ${dateFolder}/${timeFilename}`);
 
     console.log("Cache update completed successfully");
   } catch (err) {
@@ -326,61 +365,33 @@ async function updateCacheFiles() {
 }
 
 async function getCachedData() {
-  // If files don't exist at all, trigger background generation but don't wait
-  if (!filesExist()) {
-    console.log(
-      "No cached files found, generating initial cache in background..."
+  // Get the latest color data
+  const latestData = getLatestColorData();
+
+  if (!latestData) {
+    throw new Error(
+      "No color data available. Use /update-cache to generate initial data."
     );
-    // Start cache generation in background without waiting
-    updateCacheFiles().catch((err) => {
-      console.error("Background initial cache generation failed:", err);
-    });
-
-    // Throw error - no data available yet
-    throw new Error("Cache is being generated, please try again in a moment");
-  } else {
-    // Files exist - check if TTL expired and trigger background update if needed
-    if (isCacheExpired()) {
-      console.log(
-        "Cache TTL expired, triggering background update (serving cached data immediately)"
-      );
-      // Update in background without waiting - don't block the response
-      updateCacheFiles().catch((err) => {
-        console.error("Background update failed:", err);
-      });
-    } else {
-      console.log("Cache still fresh, serving cached data");
-    }
   }
-
-  // Always return current cached data immediately (even if expired/stale)
-  const metadata = getMetadata();
-  if (!metadata) {
-    throw new Error("No metadata available");
-  }
-
-  // Read image files
-  const [northwestCrop, northCrop, northeastCrop] = await Promise.all([
-    fsPromises.readFile(path.join(dataDir, "crop-left.png")),
-    fsPromises.readFile(path.join(dataDir, "crop-middle.png")),
-    fsPromises.readFile(path.join(dataDir, "crop-right.png"))
-  ]);
 
   return {
-    northwestCrop,
-    northCrop,
-    northeastCrop,
-    northwestColor: metadata.colors.northwestColor,
-    northColor: metadata.colors.northColor,
-    northeastColor: metadata.colors.northeastColor,
-    lastUpdated: metadata.lastUpdated
+    westColor: latestData.colors.west,
+    northWestColor: latestData.colors["north-west"],
+    northEastColor: latestData.colors["north-east"],
+    eastColor: latestData.colors.east,
+    lastUpdated: latestData.timestamp
   };
 }
 
 app.get("/api", async (req, res) => {
   try {
-    const { northwestColor, northColor, northeastColor, lastUpdated } =
-      await getCachedData();
+    const {
+      westColor,
+      northWestColor,
+      northEastColor,
+      eastColor,
+      lastUpdated
+    } = await getCachedData();
 
     const cacheAge = Date.now() - lastUpdated;
 
@@ -408,21 +419,15 @@ app.get("/api", async (req, res) => {
         timeZone: "America/New_York",
         hour: "numeric",
         minute: "2-digit",
-        second: "2-digit",
         hour12: true
       });
 
     const response = {
       colors: {
-        northwest: northwestColor,
-        north: northColor,
-        northeast: northeastColor
-      },
-      images: {
-        full: "/data/full.png",
-        northwest: "/data/crop-left.png",
-        north: "/data/crop-middle.png",
-        northeast: "/data/crop-right.png"
+        west: westColor,
+        "north-west": northWestColor,
+        "north-east": northEastColor,
+        east: eastColor
       },
       metadata: {
         lastUpdated: {
@@ -433,7 +438,6 @@ app.get("/api", async (req, res) => {
           timestamp: cacheAge,
           formatted: formatCacheAge(cacheAge)
         },
-        cacheConfig: config.cache,
         source: config.source
       }
     };
@@ -443,6 +447,33 @@ app.get("/api", async (req, res) => {
     console.error("API endpoint error:", error);
     res.status(500).json({
       error: "Failed to get API data",
+      message: error.message
+    });
+  }
+});
+
+app.get("/update-cache", async (req, res) => {
+  try {
+    if (updateInProgress) {
+      return res.status(429).json({
+        error: "Update already in progress",
+        message: "Please wait for the current update to complete"
+      });
+    }
+
+    // Start the update process in the background
+    updateCacheFiles().catch((err) => {
+      console.error("Update failed:", err);
+    });
+
+    res.json({
+      message: "Update started",
+      status: "processing"
+    });
+  } catch (error) {
+    console.error("Update endpoint error:", error);
+    res.status(500).json({
+      error: "Failed to start update",
       message: error.message
     });
   }
@@ -482,7 +513,7 @@ app.get("/", async (req, res) => {
         }
         .grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 2rem;
             margin: 2rem 0;
             justify-items: center;
@@ -550,23 +581,30 @@ app.get("/", async (req, res) => {
         <div class="grid">
             <div class="card">
                 <div class="color-info">
-                    <div class="color-swatch" id="northwest-swatch"></div>
-                    <div class="color-label">Northwest</div>
-                    <div class="hex-code" id="northwest-hex"></div>
+                    <div class="color-swatch" id="west-swatch"></div>
+                    <div class="color-label">West</div>
+                    <div class="hex-code" id="west-hex"></div>
                 </div>
             </div>
             <div class="card">
                 <div class="color-info">
-                    <div class="color-swatch" id="north-swatch"></div>
-                    <div class="color-label">North</div>
-                    <div class="hex-code" id="north-hex"></div>
+                    <div class="color-swatch" id="north-west-swatch"></div>
+                    <div class="color-label">North-West</div>
+                    <div class="hex-code" id="north-west-hex"></div>
                 </div>
             </div>
             <div class="card">
                 <div class="color-info">
-                    <div class="color-swatch" id="northeast-swatch"></div>
-                    <div class="color-label">Northeast</div>
-                    <div class="hex-code" id="northeast-hex"></div>
+                    <div class="color-swatch" id="north-east-swatch"></div>
+                    <div class="color-label">North-East</div>
+                    <div class="hex-code" id="north-east-hex"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="color-info">
+                    <div class="color-swatch" id="east-swatch"></div>
+                    <div class="color-label">East</div>
+                    <div class="hex-code" id="east-hex"></div>
                 </div>
             </div>
         </div>
@@ -576,15 +614,6 @@ app.get("/", async (req, res) => {
     </div>
 
     <script>
-        function formatCacheAge(ageMs) {
-            const seconds = Math.floor(ageMs / 1000);
-            const minutes = Math.floor(seconds / 60);
-            const hours = Math.floor(minutes / 60);
-            
-            if (hours > 0) return hours + 'h ' + (minutes % 60) + 'm';
-            if (minutes > 0) return minutes + 'm ' + (seconds % 60) + 's';
-            return seconds + 's';
-        }
 
         async function loadColors() {
             try {
@@ -592,14 +621,17 @@ app.get("/", async (req, res) => {
                 const data = await response.json();
                 
                 // Set color swatches and hex codes
-                document.getElementById('northwest-swatch').style.backgroundColor = data.colors.northwest;
-                document.getElementById('northwest-hex').textContent = data.colors.northwest;
+                document.getElementById('west-swatch').style.backgroundColor = data.colors.west;
+                document.getElementById('west-hex').textContent = data.colors.west;
                 
-                document.getElementById('north-swatch').style.backgroundColor = data.colors.north;
-                document.getElementById('north-hex').textContent = data.colors.north;
+                document.getElementById('north-west-swatch').style.backgroundColor = data.colors['north-west'];
+                document.getElementById('north-west-hex').textContent = data.colors['north-west'];
                 
-                document.getElementById('northeast-swatch').style.backgroundColor = data.colors.northeast;
-                document.getElementById('northeast-hex').textContent = data.colors.northeast;
+                document.getElementById('north-east-swatch').style.backgroundColor = data.colors['north-east'];
+                document.getElementById('north-east-hex').textContent = data.colors['north-east'];
+                
+                document.getElementById('east-swatch').style.backgroundColor = data.colors.east;
+                document.getElementById('east-hex').textContent = data.colors.east;
                 
                 // Update timestamp info
                 document.getElementById('timestamp-display').textContent = 
