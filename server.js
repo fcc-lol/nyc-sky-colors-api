@@ -614,6 +614,7 @@ app.get("/", async (req, res) => {
 			align-items: center;
 			justify-content: center;
 		}
+
 		.container {
 			display: flex;
 			flex-direction: column;
@@ -623,6 +624,7 @@ app.get("/", async (req, res) => {
 			text-align: center;
 			padding-bottom: 2rem;
 		}
+
 		#header {
 			display: flex;
 			flex-direction: column;
@@ -631,20 +633,24 @@ app.get("/", async (req, res) => {
 			gap: 1.25rem;
       margin-bottom: 1.5rem;
 		}
+
 		h1 {
       font-size: 2rem;
 			color: #333;
 			margin: 0;
 		}
+
 		#timestamp {
 			font-size: 1rem;
 			color: #666;
 		}
+
 		#countdown {
 			font-size: 0.875rem;
 			color: #888;
 			min-height: 1rem;
 		}
+
 		#grid {
 			display: grid;
 			grid-template-columns: repeat(4, 1fr);
@@ -652,6 +658,7 @@ app.get("/", async (req, res) => {
 			margin: 2rem 0;
 			justify-items: center;
 		}
+
 		.card {
 			background: white;
 			padding: 1rem;
@@ -659,6 +666,7 @@ app.get("/", async (req, res) => {
 			box-shadow: 0 0.125rem 1.25rem rgba(0,0,0,0.1);
 			text-align: center;
 		}
+
 		.color-swatch {
 			display: block;
 			width: 12rem;
@@ -667,6 +675,7 @@ app.get("/", async (req, res) => {
 			margin: 0 auto 1rem auto;
 			background-color: #e0e0e0;
 		}
+
 		.color-label {
 			font-size: 1rem;
 			font-weight: 500;
@@ -674,6 +683,7 @@ app.get("/", async (req, res) => {
 			color: #666;
 			margin-top: 1.5rem;
 		}
+
 		.hex-code {
 			font-weight: bold;
 			color: #000;
@@ -683,10 +693,12 @@ app.get("/", async (req, res) => {
 			text-transform: uppercase;
 			min-height: 2.4rem;
 		}
+
 		#source-link {
 			margin-top: 2rem;
 			text-align: center;
 		}
+
 		#source-link a {
 			color: #666;
 			text-decoration: none;
@@ -695,9 +707,75 @@ app.get("/", async (req, res) => {
 			padding-bottom: 0.125rem;
 			text-transform: uppercase;
 		}
+
 		#source-link a:hover {
 			color: #333;
 			border-bottom-color: #333;
+		}
+		
+		/* Mobile responsive styles */
+		@media (max-width: 1024px) {
+			body {
+				padding: 0;
+				overflow-x: hidden;
+			}
+			
+			.container {
+				max-width: 100%;
+				padding: 3rem 1rem;
+			}
+			
+			h1 {
+				font-size: 1.5rem;
+			}
+			
+			#header {
+				gap: 1rem;
+				margin-bottom: 1rem;
+			}
+			
+			#grid {
+				grid-template-columns: 2fr 2fr;
+				gap: 1.5rem;
+				margin: 1.5rem -1rem;
+				padding: 0;
+        justify-items: center;
+			}
+			
+			.hex-code {
+				font-size: 1.5rem;
+				min-height: 1.8rem;
+			}
+		}
+		
+		/* Extra small mobile devices */
+		@media (max-width: 480px) {
+			.container {
+        width: 100%;
+				padding: 2.5rem 1rem 3.5rem 1rem;
+			}
+			
+			h1 {
+				font-size: 1.25rem;
+			}
+
+      #grid {
+				grid-template-columns: 1fr;
+				width: calc(100% - 2rem);
+      }
+			
+			.card {
+				width: 100%;
+			}
+			
+			.color-swatch {
+				width: 100%;
+				height: 6rem;
+			}
+			
+			.hex-code {
+				min-height: 1.5rem;
+			}
 		}
 	</style>
 </head>
