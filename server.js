@@ -168,21 +168,31 @@ function getLatestColorData() {
         const dateStr = dateFolder; // YYYY-MM-DD
         const timeStr = latestTimeFile.replace(".json", "").replace("-", ":"); // HH:MM
 
-        // Create a date string in NYC timezone and convert to timestamp
-        const nycDateTimeStr = `${dateStr} ${timeStr}:00`;
-        const nycDate = new Date(nycDateTimeStr);
+        // The file represents NYC time, so we need to convert it to a proper UTC timestamp
+        // Parse the date components
+        const [year, month, day] = dateStr.split("-").map(Number);
+        const [hour, minute] = timeStr.split(":").map(Number);
 
-        // Get the timezone offset for NYC at this date
-        const tempNycDate = new Date(
-          nycDate.toLocaleString("en-US", { timeZone: "America/New_York" })
+        // Create a date object representing this time in NYC
+        // We'll use a reference approach: create the date as if it's UTC, then adjust
+        const utcDate = new Date(
+          Date.UTC(year, month - 1, day, hour, minute, 0)
         );
-        const tempUtcDate = new Date(
-          nycDate.toLocaleString("en-US", { timeZone: "UTC" })
-        );
-        const timezoneOffset = tempUtcDate.getTime() - tempNycDate.getTime();
 
-        // Adjust the timestamp to account for NYC timezone
-        const timestamp = nycDate.getTime() + timezoneOffset;
+        // Now we need to adjust for NYC timezone offset
+        // Get the current NYC offset (this handles DST automatically)
+        const testDate = new Date(year, month - 1, day);
+        const nycTestTime = testDate.toLocaleString("en-US", {
+          timeZone: "America/New_York"
+        });
+        const utcTestTime = testDate.toLocaleString("en-US", {
+          timeZone: "UTC"
+        });
+        const nycOffset =
+          new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+        // The timestamp should represent the NYC time converted to UTC
+        const timestamp = utcDate.getTime() + nycOffset;
 
         return {
           colors: data,
@@ -441,6 +451,83 @@ app.get("/api", async (req, res) => {
         hour12: true
       });
 
+    // Calculate next update time based on fixed intervals (e.g., :00, :15, :30, :45)
+    const now = Date.now();
+    const intervalMinutes = config.cache.updateIntervalMinutes;
+
+    // Get current time in NYC timezone
+    const nycNowString = new Date(now).toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+
+    // Parse the NYC time string to get components
+    const [datePart, timePart] = nycNowString.split(", ");
+    const [month, day, year] = datePart.split("/");
+    const [hour, minute, second] = timePart.split(":");
+
+    const currentMinutes = parseInt(minute);
+    const currentHour = parseInt(hour);
+
+    // Calculate the next 15-minute interval
+    const nextIntervalMinute =
+      Math.ceil(currentMinutes / intervalMinutes) * intervalMinutes;
+
+    let nextHour = currentHour;
+    let nextMinute = nextIntervalMinute;
+
+    if (nextIntervalMinute >= 60) {
+      nextHour = currentHour + 1;
+      nextMinute = 0;
+    }
+
+    // Use the same timezone conversion logic as in getLatestColorData()
+    // Create a UTC date with the NYC time components, then apply NYC offset
+    const utcDate = new Date(
+      Date.UTC(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        nextHour,
+        nextMinute,
+        0
+      )
+    );
+
+    // Get the timezone offset for NYC on this date
+    const testDate = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day)
+    );
+    const nycTestTime = testDate.toLocaleString("en-US", {
+      timeZone: "America/New_York"
+    });
+    const utcTestTime = testDate.toLocaleString("en-US", { timeZone: "UTC" });
+    const nycOffset =
+      new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+    // Convert NYC time to proper UTC timestamp
+    const nextUpdateTime = utcDate.getTime() + nycOffset;
+    const timeToNextUpdate = nextUpdateTime - now;
+
+    // Format next update time
+    const nextUpdateFormatted = new Date(nextUpdateTime).toLocaleTimeString(
+      "en-US",
+      {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      }
+    );
+
     const response = {
       colors: {
         west: westColor,
@@ -456,6 +543,15 @@ app.get("/api", async (req, res) => {
         cacheAge: {
           timestamp: cacheAge,
           formatted: formatCacheAge(cacheAge)
+        },
+        nextUpdate: {
+          timestamp: nextUpdateTime,
+          formatted: nextUpdateFormatted,
+          timeRemaining: Math.max(0, timeToNextUpdate)
+        },
+        updateInterval: {
+          minutes: config.cache.updateIntervalMinutes,
+          milliseconds: config.cache.updateIntervalMinutes * 60 * 1000
         },
         source: config.source
       }
@@ -573,6 +669,15 @@ app.get("/", async (req, res) => {
             padding: 0.5rem 0 2rem 0;
             color: #666;
         }
+        .countdown-timer {
+            font-size: 0.875rem;
+            color: #888;
+            margin-top: 1.75rem;
+        }
+        .countdown-timer .time-remaining {
+            font-weight: bold;
+            color: #555;
+        }
         .source-link {
             margin-top: 2rem;
             text-align: center;
@@ -596,6 +701,9 @@ app.get("/", async (req, res) => {
         <h1>NEW YORK CITY SKY COLORS</h1>
         <div class="timestamp-info">
             <span id="timestamp-display">Checking the sky...</span>
+            <div class="countdown-timer">
+                <span id="countdown-display">Calculating next update...</span>
+            </div>
         </div>
         <div class="grid">
             <div class="card">
@@ -633,6 +741,43 @@ app.get("/", async (req, res) => {
     </div>
 
     <script>
+        let countdownInterval;
+        let nextUpdateTimestamp;
+
+        function formatTimeRemaining(milliseconds) {
+            if (milliseconds <= 0) return "overdue";
+            
+            const totalSeconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.round(totalSeconds / 60);
+            
+            if (minutes > 0) {
+                return 'Next update in ' + minutes + ' minute' + (minutes !== 1 ? 's' : '');
+            } else {
+                return 'Next update in less than a minute';
+            }
+        }
+
+        function updateCountdown() {
+            if (!nextUpdateTimestamp) return;
+            
+            const now = Date.now();
+            const timeRemaining = nextUpdateTimestamp - now;
+            
+            const countdownElement = document.getElementById('countdown-display');
+            
+            if (timeRemaining <= 0) {
+                countdownElement.textContent = "Updating...";
+                countdownElement.style.color = "#888";
+                countdownElement.style.fontWeight = "normal";
+                // Try to refresh data when countdown reaches zero
+                if (timeRemaining > -60000) { // Only refresh once when just overdue
+                    loadColors();
+                }
+            } else {
+                countdownElement.textContent = formatTimeRemaining(timeRemaining);
+                countdownElement.style.color = "#888";
+            }
+        }
 
         async function loadColors() {
             try {
@@ -658,8 +803,24 @@ app.get("/", async (req, res) => {
                 
                 // Update source link
                 document.getElementById('source-url').href = data.metadata.source.url;
+                
+                // Set up countdown timer
+                nextUpdateTimestamp = data.metadata.nextUpdate.timestamp;
+                
+                // Clear existing countdown interval
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                }
+                
+                // Update countdown immediately
+                updateCountdown();
+                
+                // Start countdown timer that updates every second
+                countdownInterval = setInterval(updateCountdown, 1000);
+                
             } catch (error) {
                 console.error('Error loading colors:', error);
+                document.getElementById('countdown-display').textContent = 'Unable to calculate next update';
             }
         }
 

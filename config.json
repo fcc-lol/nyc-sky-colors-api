@@ -5,6 +5,9 @@
     "description": "SUMMIT One Vanderbilt (New York City, NY)",
     "publisher": "EarthCam"
   },
+  "cache": {
+    "updateIntervalMinutes": 15
+  },
   "crops": {
     "dimensions": {
       "width": 200,
