@@ -600,144 +600,147 @@ app.get("/", async (req, res) => {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NYC Sky Colors</title>
-    <style>
-        body {
-            font-family: monospace;
-            margin: 0;
-            padding: 1.25rem;
-            background-color: #f0f0f0;
-            min-height: calc(100vh - 2.5rem);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            max-width: 50rem;
-            text-align: center;
-            padding-bottom: 2rem;
-        }
-        h1 {
-            color: #333;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 2rem;
-            margin: 2rem 0;
-            justify-items: center;
-        }
-        .card {
-            background: white;
-            padding: 1rem;
-            border-radius: 2rem;
-            box-shadow: 0 0.125rem 1.25rem rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .color-swatch {
-            display: block;
-            width: 12rem;
-            height: 12rem;
-            border-radius: 1rem;
-            margin: 0 auto 1rem auto;
-            background-color: #e0e0e0;
-        }
-        .color-label {
-            font-size: 1rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            color: #666;
-            margin-top: 1.5rem;
-        }
-        .hex-code {
-            font-weight: bold;
-            color: #000;
-            display: block;
-            margin: 1rem 0 0.75rem 0;
-            font-size: 2rem;
-            text-transform: uppercase;
-            min-height: 2.4rem;
-        }
-        .timestamp-info {
-            font-size: 1rem;
-            padding: 0.5rem 0 2rem 0;
-            color: #666;
-        }
-        .countdown-timer {
-            font-size: 0.875rem;
-            color: #888;
-            margin-top: 1.75rem;
-        }
-        .countdown-timer .time-remaining {
-            font-weight: bold;
-            color: #555;
-        }
-        .source-link {
-            margin-top: 2rem;
-            text-align: center;
-        }
-        .source-link a {
-            color: #666;
-            text-decoration: none;
-            font-size: 0.75rem;
-            border-bottom: 0.125rem solid #ccc;
-            padding-bottom: 0.125rem;
-            text-transform: uppercase;
-        }
-        .source-link a:hover {
-            color: #333;
-            border-bottom-color: #333;
-        }
-    </style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>NYC Sky Colors</title>
+	<style>
+		body {
+			font-family: monospace;
+			margin: 0;
+			padding: 1.25rem;
+			background-color: #f0f0f0;
+			min-height: calc(100vh - 2.5rem);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.container {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			max-width: 50rem;
+			text-align: center;
+			padding-bottom: 2rem;
+		}
+		#header {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 1.25rem;
+      margin-bottom: 1.5rem;
+		}
+		h1 {
+      font-size: 2rem;
+			color: #333;
+			margin: 0;
+		}
+		#timestamp {
+			font-size: 1rem;
+			color: #666;
+		}
+		#countdown {
+			font-size: 0.875rem;
+			color: #888;
+			min-height: 1rem;
+		}
+		#grid {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 2rem;
+			margin: 2rem 0;
+			justify-items: center;
+		}
+		.card {
+			background: white;
+			padding: 1rem;
+			border-radius: 2rem;
+			box-shadow: 0 0.125rem 1.25rem rgba(0,0,0,0.1);
+			text-align: center;
+		}
+		.color-swatch {
+			display: block;
+			width: 12rem;
+			height: 12rem;
+			border-radius: 1rem;
+			margin: 0 auto 1rem auto;
+			background-color: #e0e0e0;
+		}
+		.color-label {
+			font-size: 1rem;
+			font-weight: 500;
+			text-transform: uppercase;
+			color: #666;
+			margin-top: 1.5rem;
+		}
+		.hex-code {
+			font-weight: bold;
+			color: #000;
+			display: block;
+			margin: 1rem 0 0.75rem 0;
+			font-size: 2rem;
+			text-transform: uppercase;
+			min-height: 2.4rem;
+		}
+		#source-link {
+			margin-top: 2rem;
+			text-align: center;
+		}
+		#source-link a {
+			color: #666;
+			text-decoration: none;
+			font-size: 0.875rem;
+			border-bottom: 0.125rem solid #ccc;
+			padding-bottom: 0.125rem;
+			text-transform: uppercase;
+		}
+		#source-link a:hover {
+			color: #333;
+			border-bottom-color: #333;
+		}
+	</style>
 </head>
-<body>
+  <body>
     <div class="container">
+      <div id="header">
         <h1>NEW YORK CITY SKY COLORS</h1>
-        <div class="timestamp-info">
-            <span id="timestamp-display">Checking the sky...</span>
-            <div class="countdown-timer">
-                <span id="countdown-display"></span>
-            </div>
+        <div id="timestamp">Checking the sky...</div>
+        <div id="countdown"></div>
+      </div>
+      <div id="grid">
+        <div class="card">
+          <div class="color-info">
+            <div class="color-swatch" id="west-swatch"></div>
+            <div class="color-label">West</div>
+            <div class="hex-code" id="west-hex"></div>
+          </div>
         </div>
-        <div class="grid">
-            <div class="card">
-                <div class="color-info">
-                    <div class="color-swatch" id="west-swatch"></div>
-                    <div class="color-label">West</div>
-                    <div class="hex-code" id="west-hex"></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="color-info">
-                    <div class="color-swatch" id="north-west-swatch"></div>
-                    <div class="color-label">North-West</div>
-                    <div class="hex-code" id="north-west-hex"></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="color-info">
-                    <div class="color-swatch" id="north-east-swatch"></div>
-                    <div class="color-label">North-East</div>
-                    <div class="hex-code" id="north-east-hex"></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="color-info">
-                    <div class="color-swatch" id="east-swatch"></div>
-                    <div class="color-label">East</div>
-                    <div class="hex-code" id="east-hex"></div>
-                </div>
-            </div>
+        <div class="card">
+          <div class="color-info">
+            <div class="color-swatch" id="north-west-swatch"></div>
+            <div class="color-label">North-West</div>
+            <div class="hex-code" id="north-west-hex"></div>
+          </div>
         </div>
-        <div class="source-link">
-            <a href="#" id="source-url" target="_blank" rel="noopener">View source</a>
+        <div class="card">
+          <div class="color-info">
+            <div class="color-swatch" id="north-east-swatch"></div>
+            <div class="color-label">North-East</div>
+            <div class="hex-code" id="north-east-hex"></div>
+          </div>
         </div>
+        <div class="card">
+          <div class="color-info">
+            <div class="color-swatch" id="east-swatch"></div>
+            <div class="color-label">East</div>
+            <div class="hex-code" id="east-hex"></div>
+          </div>
+        </div>
+      </div>
+      <div id="source-link">
+        <a href="#" id="source-url" target="_blank" rel="noopener">View source</a>
+      </div>
     </div>
 
     <script>
@@ -763,7 +766,7 @@ app.get("/", async (req, res) => {
             const now = Date.now();
             const timeRemaining = nextUpdateTimestamp - now;
             
-            const countdownElement = document.getElementById('countdown-display');
+            const countdownElement = document.getElementById('countdown');
             
             if (timeRemaining <= 0) {
                 countdownElement.textContent = "Updating...";
@@ -798,7 +801,7 @@ app.get("/", async (req, res) => {
                 document.getElementById('east-hex').textContent = data.colors.east;
                 
                 // Update timestamp info
-                document.getElementById('timestamp-display').textContent = 
+                document.getElementById('timestamp').textContent = 
                     data.metadata.lastUpdated.formatted;
                 
                 // Update source link
@@ -820,7 +823,7 @@ app.get("/", async (req, res) => {
                 
             } catch (error) {
                 console.error('Error loading colors:', error);
-                document.getElementById('countdown-display').textContent = 'Unable to calculate next update';
+                document.getElementById('countdown').textContent = 'Unable to calculate next update';
             }
         }
 
