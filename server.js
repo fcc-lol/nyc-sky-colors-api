@@ -322,20 +322,25 @@ async function updateCacheFiles() {
 
     // Step 6: Save timestamped JSON file with colors
     const now = new Date();
-    const nycTime = new Date(
-      now.toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
-    const dateFolder =
-      nycTime.getFullYear() +
-      "-" +
-      String(nycTime.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(nycTime.getDate()).padStart(2, "0"); // YYYY-MM-DD in NYC time
-    const timeFilename =
-      String(nycTime.getHours()).padStart(2, "0") +
-      "-" +
-      String(nycTime.getMinutes()).padStart(2, "0") +
-      ".json"; // HH-MM.json in NYC time
+    // Get NYC date and time components separately
+    const nycDate = now.toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }); // Returns "MM/DD/YYYY"
+
+    const nycTime = now.toLocaleTimeString("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }); // Returns "HH:MM"
+
+    // Convert MM/DD/YYYY to YYYY-MM-DD
+    const [month, day, year] = nycDate.split("/");
+    const dateFolder = `${year}-${month}-${day}`;
+    const timeFilename = nycTime.replace(":", "-") + ".json"; // HH-MM.json
 
     const colorData = {
       west: westColor,
