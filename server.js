@@ -972,11 +972,7 @@ app.get("/", async (req, res) => {
             const totalSeconds = Math.floor(milliseconds / 1000);
             const minutes = Math.ceil(totalSeconds / 60);
             
-            if (minutes > 0) {
-                return 'Next update in ' + minutes + ' minute' + (minutes !== 1 ? 's' : '');
-            } else {
-                return 'Next update in less than a minute';
-            }
+            return 'Next update in ' + minutes + ' minute' + (minutes !== 1 ? 's' : '');
         }
 
         function updateCountdown() {
@@ -994,8 +990,8 @@ app.get("/", async (req, res) => {
                 countdownElement.style.color = "#888";
                 countdownElement.style.fontWeight = "normal";
                 
-                // Poll for new data every 10 seconds when update is due
-                if (overdueSeconds % 10 === 0) {
+                // Poll for new data every 5 seconds when update is due
+                if (overdueSeconds % 5 === 0) {
                     loadColors();
                 }
             } else {
