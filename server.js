@@ -988,18 +988,24 @@ app.get("/", async (req, res) => {
             const countdownElement = document.getElementById('countdown');
             
             if (timeRemaining <= 0) {
+                const overdueSeconds = Math.floor(-timeRemaining / 1000);
+                
                 countdownElement.textContent = "Updating...";
                 countdownElement.style.color = "#888";
                 countdownElement.style.fontWeight = "normal";
-                // Try to refresh data when countdown reaches zero
-                if (timeRemaining > -60000) { // Only refresh once when just overdue
+                
+                // Poll for new data every 10 seconds when update is due
+                if (overdueSeconds % 10 === 0) {
                     loadColors();
                 }
             } else {
                 countdownElement.textContent = formatTimeRemaining(timeRemaining);
                 countdownElement.style.color = "#888";
+                countdownElement.style.fontWeight = "normal";
             }
         }
+
+        let lastDataTimestamp = null;
 
         async function loadColors() {
             try {
@@ -1020,6 +1026,14 @@ app.get("/", async (req, res) => {
                     showError(data.message || data.error);
                     return;
                 }
+                
+                // Check if we have new data (for current data only)
+                if (!isHistoricalData && lastDataTimestamp && data.metadata.lastUpdated.timestamp > lastDataTimestamp) {
+                    console.log('New data available!');
+                }
+                
+                // Store the timestamp of this data
+                lastDataTimestamp = data.metadata.lastUpdated.timestamp;
                 
                 // Set color swatches and hex codes
                 document.getElementById('west-swatch').style.backgroundColor = data.colors.west;
