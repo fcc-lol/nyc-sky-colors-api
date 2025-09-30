@@ -128,6 +128,19 @@ async function getCroppedSection(
   });
 }
 
+function formatTimeRemaining(milliseconds) {
+  if (milliseconds <= 0) return "overdue";
+
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.ceil(totalSeconds / 60);
+
+  if (minutes > 0) {
+    return "Next update in " + minutes + " minute" + (minutes !== 1 ? "s" : "");
+  } else {
+    return "Next update in less than a minute";
+  }
+}
+
 function getLatestColorData() {
   try {
     // Get all date folders and sort by newest first
@@ -658,7 +671,10 @@ app.get("/api", async (req, res) => {
       response.metadata.nextUpdate = {
         timestamp: nextUpdateTime,
         formatted: nextUpdateFormatted,
-        timeRemaining: Math.max(0, timeToNextUpdate)
+        timeRemaining: Math.max(0, timeToNextUpdate),
+        timeRemainingFormatted: formatTimeRemaining(
+          Math.max(0, timeToNextUpdate)
+        )
       };
     }
 
