@@ -570,7 +570,7 @@ app.get("/api", async (req, res) => {
       }
 
       response.metadata.cacheAge = {
-        timestamp: cacheAge,
+        milliseconds: cacheAge,
         formatted: formatCacheAge(cacheAge)
       };
     }
