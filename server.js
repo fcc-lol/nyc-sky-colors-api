@@ -20,12 +20,6 @@ const port = 3113;
 // Enable CORS for all origins
 app.use(cors());
 
-// Allow the site to be embedded in frames (remove X-Frame-Options restriction)
-app.use((req, res, next) => {
-  res.removeHeader("X-Frame-Options");
-  next();
-});
-
 // Create data directory if it doesn't exist
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) {
