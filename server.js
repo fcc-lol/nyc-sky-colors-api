@@ -208,6 +208,73 @@ function getLatestColorData() {
   }
 }
 
+function getColorDataForDateTime(dateStr, timeStr) {
+  try {
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new Error("Invalid date format. Expected YYYY-MM-DD");
+    }
+
+    // Validate time format (H:MM or HH:MM)
+    if (!/^\d{1,2}:\d{2}$/.test(timeStr)) {
+      throw new Error("Invalid time format. Expected H:MM or HH:MM");
+    }
+
+    // Normalize time to HH:MM format (pad single digit hours)
+    const timeParts = timeStr.split(":");
+    const normalizedTimeStr =
+      timeParts[0].padStart(2, "0") + ":" + timeParts[1];
+
+    // Check if date folder exists
+    const dateFolderPath = path.join(dataDir, dateStr);
+    if (!fs.existsSync(dateFolderPath)) {
+      throw new Error(`No data available for date ${dateStr}`);
+    }
+
+    // Convert normalized time to filename format (HH-MM.json)
+    const timeFilename = normalizedTimeStr.replace(":", "-") + ".json";
+    const filePath = path.join(dateFolderPath, timeFilename);
+
+    // Check if time file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(
+        `No data available for ${dateStr} at ${normalizedTimeStr}`
+      );
+    }
+
+    // Read the color data
+    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+    // Create timestamp from date and normalized time (NYC timezone)
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const [hour, minute] = normalizedTimeStr.split(":").map(Number);
+
+    // Create a date object representing this time in NYC
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+
+    // Adjust for NYC timezone offset
+    const testDate = new Date(year, month - 1, day);
+    const nycTestTime = testDate.toLocaleString("en-US", {
+      timeZone: "America/New_York"
+    });
+    const utcTestTime = testDate.toLocaleString("en-US", {
+      timeZone: "UTC"
+    });
+    const nycOffset =
+      new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+    const timestamp = utcDate.getTime() + nycOffset;
+
+    return {
+      colors: data,
+      timestamp
+    };
+  } catch (error) {
+    console.error("Error reading color data for specific date/time:", error);
+    throw error;
+  }
+}
+
 async function getDominantColor(imageBuffer) {
   return await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
@@ -414,148 +481,186 @@ async function getCachedData() {
 
 app.get("/api", async (req, res) => {
   try {
-    const {
-      westColor,
-      northWestColor,
-      northEastColor,
-      eastColor,
-      lastUpdated
-    } = await getCachedData();
+    // Check for date/time parameters
+    const { date, time } = req.query;
 
-    const cacheAge = Date.now() - lastUpdated;
+    let colorData;
+    let isHistoricalData = false;
 
-    // Format cache age for display
-    function formatCacheAge(ageMs) {
-      const seconds = Math.floor(ageMs / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-
-      if (hours > 0) return hours + "h " + (minutes % 60) + "m";
-      if (minutes > 0) return minutes + "m " + (seconds % 60) + "s";
-      return seconds + "s";
+    if (date && time) {
+      // Request for specific date/time
+      try {
+        colorData = getColorDataForDateTime(date, time);
+        isHistoricalData = true;
+      } catch (error) {
+        return res.status(400).json({
+          error: "Invalid date/time parameters",
+          message: error.message,
+          example: "Use format: ?date=2025-09-28&time=22:54"
+        });
+      }
+    } else if (date || time) {
+      // Only one parameter provided
+      return res.status(400).json({
+        error: "Both date and time parameters are required",
+        message:
+          "When requesting historical data, both 'date' and 'time' parameters must be provided",
+        example: "Use format: ?date=2025-09-28&time=22:54"
+      });
+    } else {
+      // No parameters, get latest data
+      const cachedData = await getCachedData();
+      colorData = {
+        colors: {
+          west: cachedData.westColor,
+          "north-west": cachedData.northWestColor,
+          "north-east": cachedData.northEastColor,
+          east: cachedData.eastColor
+        },
+        timestamp: cachedData.lastUpdated
+      };
     }
 
     // Format timestamp in real-time
     const lastUpdatedFormatted =
-      new Date(lastUpdated).toLocaleDateString("en-US", {
+      new Date(colorData.timestamp).toLocaleDateString("en-US", {
         timeZone: "America/New_York",
         year: "numeric",
         month: "long",
         day: "numeric"
       }) +
       " at " +
-      new Date(lastUpdated).toLocaleTimeString("en-US", {
+      new Date(colorData.timestamp).toLocaleTimeString("en-US", {
         timeZone: "America/New_York",
         hour: "numeric",
         minute: "2-digit",
         hour12: true
       });
 
-    // Calculate next update time based on fixed intervals (e.g., :00, :15, :30, :45)
-    const now = Date.now();
-    const intervalMinutes = config.cache.updateIntervalMinutes;
-
-    // Get current time in NYC timezone
-    const nycNowString = new Date(now).toLocaleString("en-US", {
-      timeZone: "America/New_York",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false
-    });
-
-    // Parse the NYC time string to get components
-    const [datePart, timePart] = nycNowString.split(", ");
-    const [month, day, year] = datePart.split("/");
-    const [hour, minute, second] = timePart.split(":");
-
-    const currentMinutes = parseInt(minute);
-    const currentHour = parseInt(hour);
-
-    // Calculate the next 15-minute interval
-    const nextIntervalMinute =
-      Math.ceil(currentMinutes / intervalMinutes) * intervalMinutes;
-
-    let nextHour = currentHour;
-    let nextMinute = nextIntervalMinute;
-
-    if (nextIntervalMinute >= 60) {
-      nextHour = currentHour + 1;
-      nextMinute = 0;
-    }
-
-    // Use the same timezone conversion logic as in getLatestColorData()
-    // Create a UTC date with the NYC time components, then apply NYC offset
-    const utcDate = new Date(
-      Date.UTC(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        nextHour,
-        nextMinute,
-        0
-      )
-    );
-
-    // Get the timezone offset for NYC on this date
-    const testDate = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day)
-    );
-    const nycTestTime = testDate.toLocaleString("en-US", {
-      timeZone: "America/New_York"
-    });
-    const utcTestTime = testDate.toLocaleString("en-US", { timeZone: "UTC" });
-    const nycOffset =
-      new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
-
-    // Convert NYC time to proper UTC timestamp
-    const nextUpdateTime = utcDate.getTime() + nycOffset;
-    const timeToNextUpdate = nextUpdateTime - now;
-
-    // Format next update time
-    const nextUpdateFormatted = new Date(nextUpdateTime).toLocaleTimeString(
-      "en-US",
-      {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true
-      }
-    );
-
+    // Build response object
     const response = {
-      colors: {
-        west: westColor,
-        "north-west": northWestColor,
-        "north-east": northEastColor,
-        east: eastColor
-      },
+      colors: colorData.colors,
       metadata: {
+        isHistoricalData,
         lastUpdated: {
-          timestamp: lastUpdated,
+          timestamp: colorData.timestamp,
           formatted: lastUpdatedFormatted
         },
-        cacheAge: {
-          timestamp: cacheAge,
-          formatted: formatCacheAge(cacheAge)
-        },
-        nextUpdate: {
-          timestamp: nextUpdateTime,
-          formatted: nextUpdateFormatted,
-          timeRemaining: Math.max(0, timeToNextUpdate)
-        },
+        source: config.source,
         updateInterval: {
           minutes: config.cache.updateIntervalMinutes,
           milliseconds: config.cache.updateIntervalMinutes * 60 * 1000
-        },
-        source: config.source
+        }
       }
     };
+
+    // Only add cache age for current data (not historical)
+    if (!isHistoricalData) {
+      const cacheAge = Date.now() - colorData.timestamp;
+
+      // Format cache age for display
+      function formatCacheAge(ageMs) {
+        const seconds = Math.floor(ageMs / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+
+        if (hours > 0) return hours + "h " + (minutes % 60) + "m";
+        if (minutes > 0) return minutes + "m " + (seconds % 60) + "s";
+        return seconds + "s";
+      }
+
+      response.metadata.cacheAge = {
+        timestamp: cacheAge,
+        formatted: formatCacheAge(cacheAge)
+      };
+    }
+
+    // Only add next update info for current data (not historical)
+    if (!isHistoricalData) {
+      // Calculate next update time based on fixed intervals (e.g., :00, :15, :30, :45)
+      const now = Date.now();
+      const intervalMinutes = config.cache.updateIntervalMinutes;
+
+      // Get current time in NYC timezone
+      const nycNowString = new Date(now).toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      });
+
+      // Parse the NYC time string to get components
+      const [datePart, timePart] = nycNowString.split(", ");
+      const [month, day, year] = datePart.split("/");
+      const [hour, minute, second] = timePart.split(":");
+
+      const currentMinutes = parseInt(minute);
+      const currentHour = parseInt(hour);
+
+      // Calculate the next 15-minute interval
+      const nextIntervalMinute =
+        Math.ceil(currentMinutes / intervalMinutes) * intervalMinutes;
+
+      let nextHour = currentHour;
+      let nextMinute = nextIntervalMinute;
+
+      if (nextIntervalMinute >= 60) {
+        nextHour = currentHour + 1;
+        nextMinute = 0;
+      }
+
+      // Use the same timezone conversion logic as in getLatestColorData()
+      // Create a UTC date with the NYC time components, then apply NYC offset
+      const utcDate = new Date(
+        Date.UTC(
+          parseInt(year),
+          parseInt(month) - 1,
+          parseInt(day),
+          nextHour,
+          nextMinute,
+          0
+        )
+      );
+
+      // Get the timezone offset for NYC on this date
+      const testDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day)
+      );
+      const nycTestTime = testDate.toLocaleString("en-US", {
+        timeZone: "America/New_York"
+      });
+      const utcTestTime = testDate.toLocaleString("en-US", { timeZone: "UTC" });
+      const nycOffset =
+        new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+      // Convert NYC time to proper UTC timestamp
+      const nextUpdateTime = utcDate.getTime() + nycOffset;
+      const timeToNextUpdate = nextUpdateTime - now;
+
+      // Format next update time
+      const nextUpdateFormatted = new Date(nextUpdateTime).toLocaleTimeString(
+        "en-US",
+        {
+          timeZone: "America/New_York",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true
+        }
+      );
+
+      // Add next update info to metadata
+      response.metadata.nextUpdate = {
+        timestamp: nextUpdateTime,
+        formatted: nextUpdateFormatted,
+        timeRemaining: Math.max(0, timeToNextUpdate)
+      };
+    }
 
     res.json(response);
   } catch (error) {
@@ -824,6 +929,26 @@ app.get("/", async (req, res) => {
     <script>
         let countdownInterval;
         let nextUpdateTimestamp;
+        let isHistoricalData = false;
+
+        // Parse URL parameters
+        function getUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const date = urlParams.get('date');
+            const time = urlParams.get('time');
+            
+            // Return parameters if both exist, null otherwise
+            if (date && time) {
+                return { date, time };
+            }
+            
+            return null;
+        }
+
+        function showError(message) {
+            document.getElementById('timestamp').textContent = 'Error: ' + message;
+            document.getElementById('countdown').textContent = '';
+        }
 
         function formatTimeRemaining(milliseconds) {
             if (milliseconds <= 0) return "overdue";
@@ -839,7 +964,7 @@ app.get("/", async (req, res) => {
         }
 
         function updateCountdown() {
-            if (!nextUpdateTimestamp) return;
+            if (!nextUpdateTimestamp || isHistoricalData) return;
             
             const now = Date.now();
             const timeRemaining = nextUpdateTimestamp - now;
@@ -862,8 +987,23 @@ app.get("/", async (req, res) => {
 
         async function loadColors() {
             try {
-                const response = await fetch('/api');
+                // Get URL parameters
+                const params = getUrlParameters();
+                
+                // Build API URL
+                let apiUrl = '/api';
+                if (params) {
+                    apiUrl += '?date=' + params.date + '&time=' + params.time;
+                }
+                
+                const response = await fetch(apiUrl);
                 const data = await response.json();
+                
+                // Handle API errors (let the API do all validation)
+                if (data.error) {
+                    showError(data.message || data.error);
+                    return;
+                }
                 
                 // Set color swatches and hex codes
                 document.getElementById('west-swatch').style.backgroundColor = data.colors.west;
@@ -885,23 +1025,43 @@ app.get("/", async (req, res) => {
                 // Update source link
                 document.getElementById('source-url').href = data.metadata.source.url;
                 
-                // Set up countdown timer
-                nextUpdateTimestamp = data.metadata.nextUpdate.timestamp;
+                // Check if this is historical data
+                isHistoricalData = data.metadata.isHistoricalData;
                 
-                // Clear existing countdown interval
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
+                // Handle countdown based on data type
+                if (isHistoricalData) {
+                    // For historical data, show that it's historical and don't show countdown
+                    document.getElementById('countdown').textContent = 'Historical data';
+                    document.getElementById('countdown').style.color = '#666';
+                    
+                    // Clear any existing countdown interval
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                } else {
+                    // For current data, set up countdown timer
+                    nextUpdateTimestamp = data.metadata.nextUpdate ? data.metadata.nextUpdate.timestamp : null;
+                    
+                    // Clear existing countdown interval
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                    }
+                    
+                    if (nextUpdateTimestamp) {
+                        // Update countdown immediately
+                        updateCountdown();
+                        
+                        // Start countdown timer that updates every second
+                        countdownInterval = setInterval(updateCountdown, 1000);
+                    } else {
+                        document.getElementById('countdown').textContent = '';
+                    }
                 }
-                
-                // Update countdown immediately
-                updateCountdown();
-                
-                // Start countdown timer that updates every second
-                countdownInterval = setInterval(updateCountdown, 1000);
                 
             } catch (error) {
                 console.error('Error loading colors:', error);
-                document.getElementById('countdown').textContent = 'Unable to calculate next update';
+                showError('Unable to load color data');
             }
         }
 
