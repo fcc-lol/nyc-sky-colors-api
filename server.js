@@ -288,6 +288,75 @@ function getColorDataForDateTime(dateStr, timeStr) {
   }
 }
 
+function getAllColorDataForDate(dateStr) {
+  try {
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new Error("Invalid date format. Expected YYYY-MM-DD");
+    }
+
+    // Check if date folder exists
+    const dateFolderPath = path.join(dataDir, dateStr);
+    if (!fs.existsSync(dateFolderPath)) {
+      throw new Error(`No data available for date ${dateStr}`);
+    }
+
+    // Get all time files in this date folder
+    const timeFiles = fs
+      .readdirSync(dateFolderPath)
+      .filter(
+        (file) => file.endsWith(".json") && /^\d{2}-\d{2}\.json$/.test(file)
+      )
+      .sort((a, b) => a.localeCompare(b)); // Sort times ascending
+
+    if (timeFiles.length === 0) {
+      throw new Error(`No color data files found for date ${dateStr}`);
+    }
+
+    // Read all color data files for this date
+    const allColorData = [];
+    
+    for (const timeFile of timeFiles) {
+      const filePath = path.join(dateFolderPath, timeFile);
+      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      
+      // Extract time from filename (HH-MM.json -> HH:MM)
+      const timeStr = timeFile.replace(".json", "").replace("-", ":");
+      
+      // Create timestamp from date and time (NYC timezone)
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const [hour, minute] = timeStr.split(":").map(Number);
+
+      // Create a date object representing this time in NYC
+      const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+
+      // Adjust for NYC timezone offset
+      const testDate = new Date(year, month - 1, day);
+      const nycTestTime = testDate.toLocaleString("en-US", {
+        timeZone: "America/New_York"
+      });
+      const utcTestTime = testDate.toLocaleString("en-US", {
+        timeZone: "UTC"
+      });
+      const nycOffset =
+        new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+      const timestamp = utcDate.getTime() + nycOffset;
+
+      allColorData.push({
+        time: timeStr,
+        colors: data,
+        timestamp
+      });
+    }
+
+    return allColorData;
+  } catch (error) {
+    console.error("Error reading all color data for date:", error);
+    throw error;
+  }
+}
+
 async function getDominantColor(imageBuffer) {
   return await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
@@ -499,6 +568,7 @@ app.get("/api", async (req, res) => {
 
     let colorData;
     let isHistoricalData = false;
+    let isDateOnlyRequest = false;
 
     if (date && time) {
       // Request for specific date/time
@@ -512,13 +582,32 @@ app.get("/api", async (req, res) => {
           example: "Use format: ?date=2025-09-28&time=22:54"
         });
       }
-    } else if (date || time) {
-      // Only one parameter provided
+    } else if (date && !time) {
+      // Request for all data on a specific date
+      try {
+        const allDateData = getAllColorDataForDate(date);
+        isHistoricalData = true;
+        isDateOnlyRequest = true;
+        
+        // Format the response for date-only requests
+        colorData = {
+          date: date,
+          intervals: allDateData,
+          totalIntervals: allDateData.length
+        };
+      } catch (error) {
+        return res.status(400).json({
+          error: "Invalid date parameter",
+          message: error.message,
+          example: "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:54 (for specific time)"
+        });
+      }
+    } else if (!date && time) {
+      // Only time parameter provided (invalid)
       return res.status(400).json({
-        error: "Both date and time parameters are required",
-        message:
-          "When requesting historical data, both 'date' and 'time' parameters must be provided",
-        example: "Use format: ?date=2025-09-28&time=22:54"
+        error: "Date parameter required when specifying time",
+        message: "When requesting historical data, the 'date' parameter is required. You can specify just date for all intervals, or both date and time for a specific interval.",
+        example: "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:54 (for specific time)"
       });
     } else {
       // No parameters, get latest data
@@ -534,38 +623,73 @@ app.get("/api", async (req, res) => {
       };
     }
 
-    // Format timestamp in real-time
-    const lastUpdatedFormatted =
-      new Date(colorData.timestamp).toLocaleDateString("en-US", {
-        timeZone: "America/New_York",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-      }) +
-      " at " +
-      new Date(colorData.timestamp).toLocaleTimeString("en-US", {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true
-      });
-
     // Build response object
-    const response = {
-      colors: colorData.colors,
-      metadata: {
-        isHistoricalData,
-        lastUpdated: {
-          timestamp: colorData.timestamp,
-          formatted: lastUpdatedFormatted
-        },
-        source: config.source,
-        updateInterval: {
-          minutes: config.cache.updateIntervalMinutes,
-          milliseconds: config.cache.updateIntervalMinutes * 60 * 1000
+    let response;
+
+    if (isDateOnlyRequest) {
+      // Special response format for date-only requests
+      response = {
+        date: colorData.date,
+        totalIntervals: colorData.totalIntervals,
+        intervals: colorData.intervals.map(interval => ({
+          time: interval.time,
+          colors: interval.colors,
+          timestamp: interval.timestamp,
+          formatted: new Date(interval.timestamp).toLocaleDateString("en-US", {
+            timeZone: "America/New_York",
+            year: "numeric",
+            month: "long",
+            day: "numeric"
+          }) + " at " + new Date(interval.timestamp).toLocaleTimeString("en-US", {
+            timeZone: "America/New_York",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true
+          })
+        })),
+        metadata: {
+          isHistoricalData,
+          isDateOnlyRequest: true,
+          source: config.source,
+          updateInterval: {
+            minutes: config.cache.updateIntervalMinutes,
+            milliseconds: config.cache.updateIntervalMinutes * 60 * 1000
+          }
         }
-      }
-    };
+      };
+    } else {
+      // Standard response format for single time point requests
+      const lastUpdatedFormatted =
+        new Date(colorData.timestamp).toLocaleDateString("en-US", {
+          timeZone: "America/New_York",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        }) +
+        " at " +
+        new Date(colorData.timestamp).toLocaleTimeString("en-US", {
+          timeZone: "America/New_York",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true
+        });
+
+      response = {
+        colors: colorData.colors,
+        metadata: {
+          isHistoricalData,
+          lastUpdated: {
+            timestamp: colorData.timestamp,
+            formatted: lastUpdatedFormatted
+          },
+          source: config.source,
+          updateInterval: {
+            minutes: config.cache.updateIntervalMinutes,
+            milliseconds: config.cache.updateIntervalMinutes * 60 * 1000
+          }
+        }
+      };
+    }
 
     // Only add cache age for current data (not historical)
     if (!isHistoricalData) {
