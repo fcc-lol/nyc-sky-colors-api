@@ -315,14 +315,14 @@ function getAllColorDataForDate(dateStr) {
 
     // Read all color data files for this date
     const allColorData = [];
-    
+
     for (const timeFile of timeFiles) {
       const filePath = path.join(dateFolderPath, timeFile);
       const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      
+
       // Extract time from filename (HH-MM.json -> HH:MM)
       const timeStr = timeFile.replace(".json", "").replace("-", ":");
-      
+
       // Create timestamp from date and time (NYC timezone)
       const [year, month, day] = dateStr.split("-").map(Number);
       const [hour, minute] = timeStr.split(":").map(Number);
@@ -579,7 +579,7 @@ app.get("/api", async (req, res) => {
         return res.status(400).json({
           error: "Invalid date/time parameters",
           message: error.message,
-          example: "Use format: ?date=2025-09-28&time=22:54"
+          example: "Use format: ?date=2025-09-28&time=22:45"
         });
       }
     } else if (date && !time) {
@@ -588,7 +588,7 @@ app.get("/api", async (req, res) => {
         const allDateData = getAllColorDataForDate(date);
         isHistoricalData = true;
         isDateOnlyRequest = true;
-        
+
         // Format the response for date-only requests
         colorData = {
           date: date,
@@ -599,15 +599,18 @@ app.get("/api", async (req, res) => {
         return res.status(400).json({
           error: "Invalid date parameter",
           message: error.message,
-          example: "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:54 (for specific time)"
+          example:
+            "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:45 (for specific time)"
         });
       }
     } else if (!date && time) {
       // Only time parameter provided (invalid)
       return res.status(400).json({
         error: "Date parameter required when specifying time",
-        message: "When requesting historical data, the 'date' parameter is required. You can specify just date for all intervals, or both date and time for a specific interval.",
-        example: "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:54 (for specific time)"
+        message:
+          "When requesting historical data, the 'date' parameter is required. You can specify just date for all intervals, or both date and time for a specific interval.",
+        example:
+          "Use format: ?date=2025-09-28 (for all intervals) or ?date=2025-09-28&time=22:45 (for specific time)"
       });
     } else {
       // No parameters, get latest data
@@ -631,21 +634,24 @@ app.get("/api", async (req, res) => {
       response = {
         date: colorData.date,
         totalIntervals: colorData.totalIntervals,
-        intervals: colorData.intervals.map(interval => ({
+        intervals: colorData.intervals.map((interval) => ({
           time: interval.time,
           colors: interval.colors,
           timestamp: interval.timestamp,
-          formatted: new Date(interval.timestamp).toLocaleDateString("en-US", {
-            timeZone: "America/New_York",
-            year: "numeric",
-            month: "long",
-            day: "numeric"
-          }) + " at " + new Date(interval.timestamp).toLocaleTimeString("en-US", {
-            timeZone: "America/New_York",
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true
-          })
+          formatted:
+            new Date(interval.timestamp).toLocaleDateString("en-US", {
+              timeZone: "America/New_York",
+              year: "numeric",
+              month: "long",
+              day: "numeric"
+            }) +
+            " at " +
+            new Date(interval.timestamp).toLocaleTimeString("en-US", {
+              timeZone: "America/New_York",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true
+            })
         })),
         metadata: {
           isHistoricalData,
