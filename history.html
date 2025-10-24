@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYC Sky Colors – History</title>
+    <style>
+      body {
+        font-family: monospace;
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+        min-height: 100vh;
+      }
+
+      #container {
+        width: 100vw;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+        grid-auto-rows: min-content;
+        align-content: start;
+        gap: 0;
+      }
+
+      .time-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        aspect-ratio: 1;
+      }
+
+      .color-cell {
+        aspect-ratio: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
+
+    <script>
+      async function loadAllHistoryData() {
+        try {
+          // First, get available dates
+          const availableDatesResponse = await fetch("/api/available-dates");
+          const availableDatesData = await availableDatesResponse.json();
+
+          if (availableDatesData.error) {
+            return;
+          }
+
+          if (
+            !availableDatesData.availableDates ||
+            availableDatesData.availableDates.length === 0
+          ) {
+            return;
+          }
+
+          const container = document.getElementById("container");
+          container.innerHTML = "";
+
+          // Load data for each available date
+          for (const dateInfo of availableDatesData.availableDates) {
+            try {
+              const response = await fetch(`/api?date=${dateInfo.date}`);
+              const data = await response.json();
+
+              if (data.error) {
+                console.error(
+                  `Error loading data for ${dateInfo.date}:`,
+                  data.error
+                );
+                continue;
+              }
+
+              if (data.intervals && data.intervals.length > 0) {
+                // Create color tiles for each interval
+                data.intervals.forEach((interval) => {
+                  // Create a 2x2 grid for this time interval
+                  const grid = document.createElement("div");
+                  grid.className = "time-grid";
+
+                  // Create the 4 color cells (NW, NE, W, E)
+                  const nw = document.createElement("div");
+                  nw.className = "color-cell";
+                  nw.style.backgroundColor = interval.colors["north-west"];
+
+                  const ne = document.createElement("div");
+                  ne.className = "color-cell";
+                  ne.style.backgroundColor = interval.colors["north-east"];
+
+                  const w = document.createElement("div");
+                  w.className = "color-cell";
+                  w.style.backgroundColor = interval.colors.west;
+
+                  const e = document.createElement("div");
+                  e.className = "color-cell";
+                  e.style.backgroundColor = interval.colors.east;
+
+                  // Add cells to grid in correct order (NW, NE, W, E)
+                  grid.appendChild(nw);
+                  grid.appendChild(ne);
+                  grid.appendChild(w);
+                  grid.appendChild(e);
+
+                  container.appendChild(grid);
+                });
+              }
+            } catch (error) {
+              console.error(`Error loading data for ${dateInfo.date}:`, error);
+              continue;
+            }
+          }
+        } catch (error) {
+          console.error("Error loading history:", error);
+        }
+      }
+
+      // Initialize page
+      window.onload = () => {
+        loadAllHistoryData();
+      };
+    </script>
+  </body>
+</html>

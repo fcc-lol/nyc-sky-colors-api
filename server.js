@@ -845,6 +845,80 @@ app.get("/update-cache", async (req, res) => {
   }
 });
 
+app.get("/api/available-dates", async (req, res) => {
+  try {
+    // Get all date folders and sort by newest first
+    const dateFolders = fs
+      .readdirSync(dataDir)
+      .filter((item) => {
+        const itemPath = path.join(dataDir, item);
+        return (
+          fs.statSync(itemPath).isDirectory() &&
+          /^\d{4}-\d{2}-\d{2}$/.test(item)
+        );
+      })
+      .sort((a, b) => b.localeCompare(a)); // Sort dates descending
+
+    // For each date folder, get the count of time intervals
+    const availableDates = [];
+
+    for (const dateFolder of dateFolders) {
+      const dateFolderPath = path.join(dataDir, dateFolder);
+
+      try {
+        // Get all time files in this date folder
+        const timeFiles = fs
+          .readdirSync(dateFolderPath)
+          .filter(
+            (file) => file.endsWith(".json") && /^\d{2}-\d{2}\.json$/.test(file)
+          );
+
+        if (timeFiles.length > 0) {
+          // Get first and last time for this date
+          const sortedTimes = timeFiles
+            .map((file) => file.replace(".json", "").replace("-", ":"))
+            .sort();
+
+          availableDates.push({
+            date: dateFolder,
+            intervalCount: timeFiles.length,
+            firstTime: sortedTimes[0],
+            lastTime: sortedTimes[sortedTimes.length - 1],
+            formatted: new Date(dateFolder + "T00:00:00").toLocaleDateString(
+              "en-US",
+              {
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              }
+            )
+          });
+        }
+      } catch (error) {
+        console.error(`Error reading date folder ${dateFolder}:`, error);
+        // Skip this date folder if there's an error
+        continue;
+      }
+    }
+
+    res.json({
+      availableDates,
+      totalDates: availableDates.length,
+      latestDate: availableDates.length > 0 ? availableDates[0].date : null,
+      oldestDate:
+        availableDates.length > 0
+          ? availableDates[availableDates.length - 1].date
+          : null
+    });
+  } catch (error) {
+    console.error("Available dates endpoint error:", error);
+    res.status(500).json({
+      error: "Failed to get available dates",
+      message: error.message
+    });
+  }
+});
+
 app.get("/", async (req, res) => {
   try {
     // Serve the client HTML file
@@ -854,6 +928,20 @@ app.get("/", async (req, res) => {
     console.error("Client endpoint error:", error);
     res.status(500).json({
       error: "Failed to serve client",
+      message: error.message
+    });
+  }
+});
+
+app.get("/history", async (req, res) => {
+  try {
+    // Serve the history view HTML file
+    const historyPath = path.join(process.cwd(), "history.html");
+    res.sendFile(historyPath);
+  } catch (error) {
+    console.error("History endpoint error:", error);
+    res.status(500).json({
+      error: "Failed to serve history view",
       message: error.message
     });
   }
