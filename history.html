@@ -37,76 +37,53 @@
     <script>
       async function loadAllHistoryData() {
         try {
-          // First, get available dates
-          const availableDatesResponse = await fetch("/api/available-dates");
-          const availableDatesData = await availableDatesResponse.json();
+          // Get the last 30 days of data in one request
+          const response = await fetch("/api/recent");
+          const data = await response.json();
 
-          if (availableDatesData.error) {
+          if (data.error) {
+            console.error("Error loading recent data:", data.error);
             return;
           }
 
-          if (
-            !availableDatesData.availableDates ||
-            availableDatesData.availableDates.length === 0
-          ) {
+          if (!data.intervals || data.intervals.length === 0) {
             return;
           }
 
           const container = document.getElementById("container");
           container.innerHTML = "";
 
-          // Load data for each available date
-          for (const dateInfo of availableDatesData.availableDates) {
-            try {
-              const response = await fetch(`/api?date=${dateInfo.date}`);
-              const data = await response.json();
+          // Create color tiles for each interval
+          data.intervals.forEach((interval) => {
+            // Create a 2x2 grid for this time interval
+            const grid = document.createElement("div");
+            grid.className = "time-grid";
 
-              if (data.error) {
-                console.error(
-                  `Error loading data for ${dateInfo.date}:`,
-                  data.error
-                );
-                continue;
-              }
+            // Create the 4 color cells (NW, NE, W, E)
+            const nw = document.createElement("div");
+            nw.className = "color-cell";
+            nw.style.backgroundColor = interval.colors["north-west"];
 
-              if (data.intervals && data.intervals.length > 0) {
-                // Create color tiles for each interval
-                data.intervals.forEach((interval) => {
-                  // Create a 2x2 grid for this time interval
-                  const grid = document.createElement("div");
-                  grid.className = "time-grid";
+            const ne = document.createElement("div");
+            ne.className = "color-cell";
+            ne.style.backgroundColor = interval.colors["north-east"];
 
-                  // Create the 4 color cells (NW, NE, W, E)
-                  const nw = document.createElement("div");
-                  nw.className = "color-cell";
-                  nw.style.backgroundColor = interval.colors["north-west"];
+            const w = document.createElement("div");
+            w.className = "color-cell";
+            w.style.backgroundColor = interval.colors.west;
 
-                  const ne = document.createElement("div");
-                  ne.className = "color-cell";
-                  ne.style.backgroundColor = interval.colors["north-east"];
+            const e = document.createElement("div");
+            e.className = "color-cell";
+            e.style.backgroundColor = interval.colors.east;
 
-                  const w = document.createElement("div");
-                  w.className = "color-cell";
-                  w.style.backgroundColor = interval.colors.west;
+            // Add cells to grid in correct order (NW, NE, W, E)
+            grid.appendChild(nw);
+            grid.appendChild(ne);
+            grid.appendChild(w);
+            grid.appendChild(e);
 
-                  const e = document.createElement("div");
-                  e.className = "color-cell";
-                  e.style.backgroundColor = interval.colors.east;
-
-                  // Add cells to grid in correct order (NW, NE, W, E)
-                  grid.appendChild(nw);
-                  grid.appendChild(ne);
-                  grid.appendChild(w);
-                  grid.appendChild(e);
-
-                  container.appendChild(grid);
-                });
-              }
-            } catch (error) {
-              console.error(`Error loading data for ${dateInfo.date}:`, error);
-              continue;
-            }
-          }
+            container.appendChild(grid);
+          });
         } catch (error) {
           console.error("Error loading history:", error);
         }
