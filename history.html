@@ -37,13 +37,25 @@
     <script>
       async function loadAllHistoryData() {
         try {
-          // Get the last 30 days of data in one request
-          const response = await fetch("/api/recent");
+          // Check if useCached query parameter is present
+          const urlParams = new URLSearchParams(window.location.search);
+          const useCached = urlParams.get("useCached") === "true";
+
+          // Use cached endpoint if requested, otherwise use live endpoint
+          const endpoint = useCached ? "/api/recent-cached" : "/api/recent";
+          console.log(`Loading data from ${endpoint}...`);
+
+          const response = await fetch(endpoint);
           const data = await response.json();
 
           if (data.error) {
             console.error("Error loading recent data:", data.error);
             return;
+          }
+
+          // Log cache info if using cached data
+          if (useCached && data.cachedAt) {
+            console.log(`Using cached data from: ${data.cachedAtFormatted}`);
           }
 
           if (!data.intervals || data.intervals.length === 0) {
@@ -84,6 +96,10 @@
 
             container.appendChild(grid);
           });
+
+          console.log(
+            `Loaded ${data.totalIntervals} intervals from ${data.daysIncluded} days`
+          );
         } catch (error) {
           console.error("Error loading history:", error);
         }

@@ -918,99 +918,170 @@ app.get("/api/available-dates", async (req, res) => {
   }
 });
 
+// Helper function to generate recent data (used by both live and cached endpoints)
+function generateRecentData() {
+  // Get all date folders and sort by newest first
+  const dateFolders = fs
+    .readdirSync(dataDir)
+    .filter((item) => {
+      const itemPath = path.join(dataDir, item);
+      return (
+        fs.statSync(itemPath).isDirectory() &&
+        /^\d{4}-\d{2}-\d{2}$/.test(item)
+      );
+    })
+    .sort((a, b) => b.localeCompare(a)) // Sort dates descending
+    .slice(0, 30); // Take only the most recent 30 days
+
+  const allIntervals = [];
+  let totalIntervals = 0;
+
+  // Load data for each of the recent dates
+  for (const dateFolder of dateFolders) {
+    const dateFolderPath = path.join(dataDir, dateFolder);
+
+    try {
+      // Get all time files in this date folder
+      const timeFiles = fs
+        .readdirSync(dateFolderPath)
+        .filter(
+          (file) => file.endsWith(".json") && /^\d{2}-\d{2}\.json$/.test(file)
+        )
+        .sort((a, b) => a.localeCompare(b)); // Sort times ascending
+
+      // Read all color data files for this date
+      for (const timeFile of timeFiles) {
+        const filePath = path.join(dateFolderPath, timeFile);
+        const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+        // Extract time from filename (HH-MM.json -> HH:MM)
+        const timeStr = timeFile.replace(".json", "").replace("-", ":");
+
+        // Create timestamp from date and time (NYC timezone)
+        const [year, month, day] = dateFolder.split("-").map(Number);
+        const [hour, minute] = timeStr.split(":").map(Number);
+
+        // Create a date object representing this time in NYC
+        const utcDate = new Date(
+          Date.UTC(year, month - 1, day, hour, minute, 0)
+        );
+
+        // Adjust for NYC timezone offset
+        const testDate = new Date(year, month - 1, day);
+        const nycTestTime = testDate.toLocaleString("en-US", {
+          timeZone: "America/New_York"
+        });
+        const utcTestTime = testDate.toLocaleString("en-US", {
+          timeZone: "UTC"
+        });
+        const nycOffset =
+          new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
+
+        const timestamp = utcDate.getTime() + nycOffset;
+
+        allIntervals.push({
+          date: dateFolder,
+          time: timeStr,
+          colors: data,
+          timestamp
+        });
+
+        totalIntervals++;
+      }
+    } catch (error) {
+      console.error(`Error reading date folder ${dateFolder}:`, error);
+      continue;
+    }
+  }
+
+  // Sort all intervals by timestamp (newest first)
+  allIntervals.sort((a, b) => b.timestamp - a.timestamp);
+
+  return {
+    intervals: allIntervals,
+    totalIntervals,
+    dateRange: {
+      from:
+        dateFolders.length > 0 ? dateFolders[dateFolders.length - 1] : null,
+      to: dateFolders.length > 0 ? dateFolders[0] : null
+    },
+    daysIncluded: dateFolders.length
+  };
+}
+
 app.get("/api/recent", async (req, res) => {
   try {
-    // Get all date folders and sort by newest first
-    const dateFolders = fs
-      .readdirSync(dataDir)
-      .filter((item) => {
-        const itemPath = path.join(dataDir, item);
-        return (
-          fs.statSync(itemPath).isDirectory() &&
-          /^\d{4}-\d{2}-\d{2}$/.test(item)
-        );
-      })
-      .sort((a, b) => b.localeCompare(a)) // Sort dates descending
-      .slice(0, 30); // Take only the most recent 30 days
-
-    const allIntervals = [];
-    let totalIntervals = 0;
-
-    // Load data for each of the recent dates
-    for (const dateFolder of dateFolders) {
-      const dateFolderPath = path.join(dataDir, dateFolder);
-
-      try {
-        // Get all time files in this date folder
-        const timeFiles = fs
-          .readdirSync(dateFolderPath)
-          .filter(
-            (file) => file.endsWith(".json") && /^\d{2}-\d{2}\.json$/.test(file)
-          )
-          .sort((a, b) => a.localeCompare(b)); // Sort times ascending
-
-        // Read all color data files for this date
-        for (const timeFile of timeFiles) {
-          const filePath = path.join(dateFolderPath, timeFile);
-          const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
-
-          // Extract time from filename (HH-MM.json -> HH:MM)
-          const timeStr = timeFile.replace(".json", "").replace("-", ":");
-
-          // Create timestamp from date and time (NYC timezone)
-          const [year, month, day] = dateFolder.split("-").map(Number);
-          const [hour, minute] = timeStr.split(":").map(Number);
-
-          // Create a date object representing this time in NYC
-          const utcDate = new Date(
-            Date.UTC(year, month - 1, day, hour, minute, 0)
-          );
-
-          // Adjust for NYC timezone offset
-          const testDate = new Date(year, month - 1, day);
-          const nycTestTime = testDate.toLocaleString("en-US", {
-            timeZone: "America/New_York"
-          });
-          const utcTestTime = testDate.toLocaleString("en-US", {
-            timeZone: "UTC"
-          });
-          const nycOffset =
-            new Date(utcTestTime).getTime() - new Date(nycTestTime).getTime();
-
-          const timestamp = utcDate.getTime() + nycOffset;
-
-          allIntervals.push({
-            date: dateFolder,
-            time: timeStr,
-            colors: data,
-            timestamp
-          });
-
-          totalIntervals++;
-        }
-      } catch (error) {
-        console.error(`Error reading date folder ${dateFolder}:`, error);
-        continue;
-      }
-    }
-
-    // Sort all intervals by timestamp (newest first)
-    allIntervals.sort((a, b) => b.timestamp - a.timestamp);
-
-    res.json({
-      intervals: allIntervals,
-      totalIntervals,
-      dateRange: {
-        from:
-          dateFolders.length > 0 ? dateFolders[dateFolders.length - 1] : null,
-        to: dateFolders.length > 0 ? dateFolders[0] : null
-      },
-      daysIncluded: dateFolders.length
-    });
+    const recentData = generateRecentData();
+    res.json(recentData);
   } catch (error) {
     console.error("Recent data endpoint error:", error);
     res.status(500).json({
       error: "Failed to get recent data",
+      message: error.message
+    });
+  }
+});
+
+// Cached version of recent data - serves a pre-generated JSON file
+app.get("/api/recent-cached", async (req, res) => {
+  try {
+    const cachePath = path.join(dataDir, "recent-cache.json");
+    
+    if (!fs.existsSync(cachePath)) {
+      return res.status(404).json({
+        error: "Cache not found",
+        message: "Please use /api/update-recent-cache to generate the cache first"
+      });
+    }
+
+    const cacheData = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+    res.json(cacheData);
+  } catch (error) {
+    console.error("Cached recent data endpoint error:", error);
+    res.status(500).json({
+      error: "Failed to get cached recent data",
+      message: error.message
+    });
+  }
+});
+
+// Endpoint to update the recent data cache
+app.get("/api/update-recent-cache", async (req, res) => {
+  try {
+    const recentData = generateRecentData();
+    
+    // Add metadata about when the cache was generated
+    const cacheWithMetadata = {
+      ...recentData,
+      cachedAt: Date.now(),
+      cachedAtFormatted: new Date().toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      })
+    };
+
+    const cachePath = path.join(dataDir, "recent-cache.json");
+    fs.writeFileSync(cachePath, JSON.stringify(cacheWithMetadata, null, 2));
+    
+    console.log("Recent data cache updated successfully");
+    
+    res.json({
+      message: "Cache updated successfully",
+      totalIntervals: recentData.totalIntervals,
+      daysIncluded: recentData.daysIncluded,
+      dateRange: recentData.dateRange,
+      cachedAt: cacheWithMetadata.cachedAt,
+      cachedAtFormatted: cacheWithMetadata.cachedAtFormatted
+    });
+  } catch (error) {
+    console.error("Update recent cache endpoint error:", error);
+    res.status(500).json({
+      error: "Failed to update cache",
       message: error.message
     });
   }
