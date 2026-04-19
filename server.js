@@ -4,6 +4,9 @@ import fs from "fs";
 import path from "path";
 import cors from "cors";
 import { promisify } from "util";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
 
 const execAsync = promisify(exec);
 
@@ -1253,6 +1256,144 @@ app.get("/debug/crop/:direction", async (req, res) => {
       message: error.message
     });
   }
+});
+
+function buildMcpServer() {
+  const server = new McpServer({
+    name: "nyc-sky-colors",
+    version: "1.0.0"
+  });
+
+  server.registerTool(
+    "get_current_sky_color",
+    {
+      description:
+        "Get the current sky colors over NYC (west, north-west, north-east, east) sampled from the live SUMMIT One Vanderbilt webcam. Updated every 15 minutes."
+    },
+    async () => {
+      const cached = await getCachedData();
+      const payload = {
+        colors: {
+          west: cached.westColor,
+          "north-west": cached.northWestColor,
+          "north-east": cached.northEastColor,
+          east: cached.eastColor
+        },
+        timestamp: cached.lastUpdated,
+        formatted: new Date(cached.lastUpdated).toLocaleString("en-US", {
+          timeZone: "America/New_York"
+        })
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }]
+      };
+    }
+  );
+
+  server.registerTool(
+    "get_sky_color_at_date",
+    {
+      description:
+        "Look up historical NYC sky colors for a specific date (and optional time). If only date is given, returns all 15-minute intervals recorded that day. Times are New York local time.",
+      inputSchema: {
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .describe("Date in YYYY-MM-DD format (America/New_York)"),
+        time: z
+          .string()
+          .regex(/^\d{1,2}:\d{2}$/)
+          .optional()
+          .describe(
+            "Optional time in HH:MM (24-hour, NYC local). Snapped to 15-minute intervals."
+          )
+      }
+    },
+    async ({ date, time }) => {
+      try {
+        if (time) {
+          const result = getColorDataForDateTime(date, time);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    date,
+                    time,
+                    colors: result.colors,
+                    timestamp: result.timestamp
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+        const intervals = getAllColorDataForDate(date);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { date, totalIntervals: intervals.length, intervals },
+                null,
+                2
+              )
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: error.message }]
+        };
+      }
+    }
+  );
+
+  return server;
+}
+
+app.post("/mcp", express.json(), async (req, res) => {
+  try {
+    const mcp = buildMcpServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined
+    });
+    res.on("close", () => {
+      transport.close();
+      mcp.close();
+    });
+    await mcp.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("MCP request error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null
+      });
+    }
+  }
+});
+
+app.get("/mcp", (req, res) => {
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed." },
+    id: null
+  });
+});
+
+app.delete("/mcp", (req, res) => {
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed." },
+    id: null
+  });
 });
 
 app.listen(port, () => {
