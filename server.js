@@ -33,7 +33,7 @@ async function getFrameData() {
   try {
     // Step 1: Get direct video URL from yt-dlp
     const { stdout: videoUrl } = await execAsync(
-      `yt-dlp -g "${config.source.url}"`,
+      `yt-dlp -g -f "bv*" "${config.source.url}"`,
       {
         encoding: "utf8"
       }
@@ -429,7 +429,7 @@ async function updateCacheFiles() {
 
     // Step 2: Get video dimensions to calculate crop positions
     const { stdout: videoUrlOutput } = await execAsync(
-      `yt-dlp -g "${config.source.url}"`,
+      `yt-dlp -g -f "bv*" "${config.source.url}"`,
       {
         encoding: "utf8"
       }
