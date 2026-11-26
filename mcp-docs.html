@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYC Sky Colors – MCP Documentation</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      body {
+        font-family: monospace;
+        margin: 0;
+        padding: 3rem 1.25rem 4rem;
+        background-color: #f0f0f0;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        font-size: 1rem;
+        text-transform: uppercase;
+        color: #666;
+        margin: 0 0 1rem;
+      }
+
+      h3 {
+        font-size: 1.125rem;
+        margin: 0 0 0.5rem;
+        word-break: break-word;
+      }
+
+      p {
+        margin: 0 0 1rem;
+      }
+
+      .lede {
+        color: #666;
+        margin-bottom: 2rem;
+      }
+
+      section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 1.5rem;
+        box-shadow: 0 0.125rem 1.25rem rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+      }
+
+      section > :last-child {
+        margin-bottom: 0;
+      }
+
+      .tool + .tool {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 0.125rem solid #f0f0f0;
+      }
+
+      code {
+        background: #f0f0f0;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.375rem;
+        word-break: break-word;
+      }
+
+      pre {
+        background: #f0f0f0;
+        padding: 1rem;
+        border-radius: 1rem;
+        overflow-x: auto;
+        margin: 0 0 1rem;
+        line-height: 1.4;
+      }
+
+      pre code {
+        background: none;
+        padding: 0;
+        word-break: normal;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 1rem;
+      }
+
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.5rem 0.75rem 0.5rem 0;
+        border-bottom: 0.125rem solid #f0f0f0;
+      }
+
+      th {
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        color: #666;
+      }
+
+      ul {
+        margin: 0 0 1rem;
+        padding-left: 1.25rem;
+      }
+
+      a {
+        color: #333;
+        text-decoration: none;
+        border-bottom: 0.125rem solid #ccc;
+      }
+
+      a:hover {
+        border-bottom-color: #333;
+      }
+
+      nav {
+        margin-top: 2rem;
+        text-align: center;
+        color: #ccc;
+      }
+
+      nav a {
+        color: #666;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        padding-bottom: 0.125rem;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 480px) {
+        body {
+          padding: 2rem 1rem 3rem;
+        }
+
+        h1 {
+          font-size: 1.5rem;
+        }
+
+        section {
+          padding: 1.25rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MCP Documentation</h1>
+      <p class="lede">
+        NYC Sky Colors runs a public Model Context Protocol server, so Claude
+        and other AI assistants can look up the color of the sky over New York
+        City, now or at any recorded moment in the past.
+      </p>
+
+      <section>
+        <h2>Connect</h2>
+        <table>
+          <tr>
+            <th>Server URL</th>
+            <td><code>https://nyc-sky-colors.fcc.lol/mcp</code></td>
+          </tr>
+          <tr>
+            <th>Transport</th>
+            <td>Streamable HTTP (stateless, <code>POST</code> only)</td>
+          </tr>
+          <tr>
+            <th>Authentication</th>
+            <td>None. No account or API key is needed.</td>
+          </tr>
+        </table>
+        <p>
+          <strong>Claude:</strong>
+          <a
+            href="https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=NYC%20Sky%20Colors%20API&connectorUrl=https%3A%2F%2Fnyc-sky-colors.fcc.lol%2Fmcp"
+            target="_blank"
+            rel="noopener"
+            >add it as a custom connector</a
+          >, or paste the server URL into the connector settings yourself.
+        </p>
+        <p><strong>Claude Code:</strong></p>
+        <pre><code>claude mcp add --transport http nyc-sky-colors https://nyc-sky-colors.fcc.lol/mcp</code></pre>
+        <p>
+          Any other MCP client that supports Streamable HTTP can connect with
+          the same URL.
+        </p>
+      </section>
+
+      <section>
+        <h2>Tools</h2>
+
+        <div class="tool">
+          <h3>get_current_sky_color</h3>
+          <p>
+            Returns the most recent sky colors in four directions: west,
+            north-west, north-east and east. Takes no parameters.
+          </p>
+          <p>Example result:</p>
+          <pre><code>{
+  "colors": {
+    "west": "#6f8fb5",
+    "north-west": "#7a9cc4",
+    "north-east": "#84a7cf",
+    "east": "#7d9fc6"
+  },
+  "timestamp": 1795712400000,
+  "formatted": "11/26/2026, 12:00:00 PM"
+}</code></pre>
+          <p>
+            <code>timestamp</code> is when the sample was taken, in Unix
+            milliseconds. <code>formatted</code> is the same moment in New York
+            local time.
+          </p>
+        </div>
+
+        <div class="tool">
+          <h3>get_sky_color_at_date</h3>
+          <p>
+            Looks up recorded sky colors for a past date. With a time it
+            returns one sample; without one it returns every sample recorded
+            that day.
+          </p>
+          <table>
+            <tr>
+              <th>Parameter</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>date</code></td>
+              <td>Yes</td>
+              <td>
+                <code>YYYY-MM-DD</code>, in New York local time.
+              </td>
+            </tr>
+            <tr>
+              <td><code>time</code></td>
+              <td>No</td>
+              <td>
+                <code>HH:MM</code>, 24-hour, New York local time. Use a
+                quarter-hour such as <code>14:30</code>, since that is when
+                samples are recorded.
+              </td>
+            </tr>
+          </table>
+          <p>Example result with a date and time:</p>
+          <pre><code>{
+  "date": "2025-09-29",
+  "time": "00:00",
+  "colors": {
+    "west": "#08080e",
+    "north-west": "#0c0c11",
+    "north-east": "#0f0f15",
+    "east": "#0b0a0f"
+  },
+  "timestamp": 1759118400000
+}</code></pre>
+          <p>
+            Example result with a date only (a full day has 96 samples):
+          </p>
+          <pre><code>{
+  "date": "2025-09-29",
+  "totalIntervals": 96,
+  "intervals": [
+    {
+      "time": "00:00",
+      "colors": { "west": "#08080e", "north-west": "#0c0c11", ... },
+      "timestamp": 1759118400000
+    },
+    ...
+  ]
+}</code></pre>
+          <p>
+            If nothing was recorded for the date or time you ask for, the tool
+            returns an error such as
+            <code>No data available for date 2024-01-01</code>.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>About the data</h2>
+        <ul>
+          <li>
+            Colors are sampled from the live
+            <a
+              href="https://www.youtube.com/watch?v=2_PDaUJbfuI"
+              target="_blank"
+              rel="noopener"
+              >SUMMIT One Vanderbilt webcam</a
+            >
+            published by EarthCam.
+          </li>
+          <li>
+            A new sample is taken every 15 minutes. Each color is the average
+            color of a patch of sky in that direction, as a hex code.
+          </li>
+          <li>Records begin in late September 2025.</li>
+          <li>
+            Colors come from a camera, so they are affected by exposure,
+            weather, glare and anything that passes in front of the lens.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Example prompts</h2>
+        <ul>
+          <li>What color is the sky in New York right now?</li>
+          <li>What did the sunset look like over NYC on October 12, 2025?</li>
+          <li>Build a color palette from yesterday's sky in New York.</li>
+        </ul>
+      </section>
+
+      <nav>
+        <a href="/">Home</a>
+        &nbsp;·&nbsp;
+        <a href="/history">History</a>
+        &nbsp;·&nbsp;
+        <a href="/privacy">Privacy policy</a>
+      </nav>
+    </main>
+  </body>
+</html>

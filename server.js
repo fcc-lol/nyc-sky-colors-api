@@ -1108,6 +1108,14 @@ app.get("/favicon.svg", (req, res) => {
   res.sendFile(path.join(process.cwd(), "favicon.svg"));
 });
 
+app.get("/mcp-docs", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "mcp-docs.html"));
+});
+
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "privacy.html"));
+});
+
 app.get("/history", async (req, res) => {
   try {
     // Serve the history view HTML file

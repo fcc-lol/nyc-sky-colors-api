@@ -9,6 +9,9 @@ Created: Sun Sep 28 19:17:37 UTC 2025
 ### Viewer
 
 - `/` - Front-end web interface showing data from the API
+- `/history` - Grid of all recorded sky colors
+- `/mcp-docs` - Public documentation for the MCP server
+- `/privacy` - Privacy policy
 
 ### API Endpoints
 
