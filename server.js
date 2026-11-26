@@ -1,14 +1,12 @@
 import express from "express";
-import { execSync, spawn, exec } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
-import { promisify } from "util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-const execAsync = promisify(exec);
 
 // Load configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
@@ -29,16 +27,43 @@ if (!fs.existsSync(dataDir)) {
   console.log("Created data directory");
 }
 
+// EarthCam's player only serves the stream when the request comes from its own site
+const earthcamReferer = "https://www.earthcam.com/";
+
+// Read the camera page and pull out the (short-lived, tokenized) HLS stream URL
+async function getStreamUrl() {
+  const pageUrl = config.source.url;
+  const camName = new URL(pageUrl).searchParams.get("cam");
+
+  const response = await fetch(pageUrl, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; nyc-sky-colors)" },
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!response.ok) {
+    throw new Error(`EarthCam page returned ${response.status}`);
+  }
+  const html = await response.text();
+
+  // The page embeds each camera's settings as JSON keyed by camera name
+  const camStart = camName ? html.indexOf(`"${camName}":{`) : 0;
+  if (camStart === -1) {
+    throw new Error(`Camera "${camName}" not found on EarthCam page`);
+  }
+  const match = html.slice(camStart).match(/"stream":("(?:[^"\\]|\\.)*")/);
+  if (!match) {
+    throw new Error("No stream URL found on EarthCam page");
+  }
+  const streamUrl = JSON.parse(match[1]);
+  if (!streamUrl.includes(".m3u8")) {
+    throw new Error(`Unexpected stream URL on EarthCam page: ${streamUrl}`);
+  }
+  return streamUrl;
+}
+
 async function getFrameData() {
   try {
-    // Step 1: Get direct video URL from yt-dlp
-    const { stdout: videoUrl } = await execAsync(
-      `yt-dlp -g -f "bv*" "${config.source.url}"`,
-      {
-        encoding: "utf8"
-      }
-    );
-    const trimmedVideoUrl = videoUrl.trim();
+    // Step 1: Get the live stream URL from the EarthCam page
+    const trimmedVideoUrl = await getStreamUrl();
 
     console.log("Video stream URL:", trimmedVideoUrl);
 
@@ -46,6 +71,8 @@ async function getFrameData() {
     return await new Promise((resolve, reject) => {
       const ffmpeg = spawn("ffmpeg", [
         "-y",
+        "-headers",
+        `Referer: ${earthcamReferer}\r\n`,
         "-i",
         trimmedVideoUrl,
         "-vframes",
@@ -427,31 +454,10 @@ async function updateCacheFiles() {
     const imageBuffer = await getFrameData();
     console.log("Got full frame buffer:", imageBuffer.length, "bytes");
 
-    // Step 2: Get video dimensions to calculate crop positions
-    const { stdout: videoUrlOutput } = await execAsync(
-      `yt-dlp -g -f "bv*" "${config.source.url}"`,
-      {
-        encoding: "utf8"
-      }
-    );
-    const videoUrl = videoUrlOutput.trim();
-
-    const { stdout: videoInfo } = await execAsync(
-      `ffprobe -v quiet -print_format json -show_streams "${videoUrl}"`,
-      { encoding: "utf8" }
-    );
-
-    const streams = JSON.parse(videoInfo).streams;
-    const videoStream = streams.find((s) => s.codec_type === "video");
-    const width = videoStream.width;
-    const height = videoStream.height;
-
-    console.log(`Video dimensions: ${width}x${height}`);
-
-    // Step 3: Get crop coordinates from config
+    // Step 2: Get crop coordinates from config
     const cropCoordinates = config.crops.coordinates;
 
-    // Step 4: Crop four sections from the single image
+    // Step 3: Crop four sections from the single image
     console.log("Creating crops from single image...");
     const [westCrop, northWestCrop, northEastCrop, eastCrop] =
       await Promise.all([
@@ -479,7 +485,7 @@ async function updateCacheFiles() {
 
     console.log("All crops completed, extracting colors...");
 
-    // Step 5: Extract dominant colors from each crop
+    // Step 4: Extract dominant colors from each crop
     const [westColor, northWestColor, northEastColor, eastColor] =
       await Promise.all([
         getDominantColor(westCrop),
@@ -495,7 +501,7 @@ async function updateCacheFiles() {
       eastColor
     });
 
-    // Step 6: Save timestamped JSON file with colors
+    // Step 5: Save timestamped JSON file with colors
     const now = new Date();
     // Get NYC date and time components separately
     const nycDate = now.toLocaleDateString("en-US", {

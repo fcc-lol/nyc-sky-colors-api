@@ -1,7 +1,7 @@
 {
   "source": {
-    "type": "youtube",
-    "url": "https://www.youtube.com/watch?v=2_PDaUJbfuI",
+    "type": "earthcam",
+    "url": "https://www.earthcam.com/usa/newyork/midtown/onevanderbilt/?cam=one_vanderbilt_nyc",
     "description": "SUMMIT One Vanderbilt (New York City, NY)",
     "publisher": "EarthCam"
   },
