@@ -1104,6 +1104,10 @@ app.get("/", async (req, res) => {
   }
 });
 
+app.get("/favicon.svg", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "favicon.svg"));
+});
+
 app.get("/history", async (req, res) => {
   try {
     // Serve the history view HTML file

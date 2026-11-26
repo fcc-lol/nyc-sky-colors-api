@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <clipPath id="r"><rect width="64" height="64" rx="14" /></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect x="0" y="0" width="32" height="32" fill="#3F7FD9" />
+    <rect x="32" y="0" width="32" height="32" fill="#8EC5F4" />
+    <rect x="0" y="32" width="32" height="32" fill="#F4845F" />
+    <rect x="32" y="32" width="32" height="32" fill="#F9C784" />
+  </g>
+</svg>

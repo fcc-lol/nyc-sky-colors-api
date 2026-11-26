@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NYC Sky Colors</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
     <style>
       body {
         font-family: monospace;
@@ -310,6 +311,31 @@
         }
       }
 
+      // Repaint the favicon's four quadrants with the sky colors on screen
+      function updateFavicon(colors) {
+        const quadrants = [
+          [0, 0, colors["north-west"]],
+          [32, 0, colors["north-east"]],
+          [0, 32, colors.west],
+          [32, 32, colors.east]
+        ];
+        if (quadrants.some(([, , c]) => !/^#[0-9a-f]{3,8}$/i.test(c))) return;
+
+        const rects = quadrants
+          .map(
+            ([x, y, c]) =>
+              `<rect x="${x}" y="${y}" width="32" height="32" fill="${c}"/>`
+          )
+          .join("");
+        const svg =
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+          `<clipPath id="r"><rect width="64" height="64" rx="14"/></clipPath>` +
+          `<g clip-path="url(#r)">${rects}</g></svg>`;
+
+        document.getElementById("favicon").href =
+          "data:image/svg+xml," + encodeURIComponent(svg);
+      }
+
       let lastDataTimestamp = null;
 
       async function loadColors() {
@@ -362,6 +388,8 @@
           document.getElementById("east-swatch").style.backgroundColor =
             data.colors.east;
           document.getElementById("east-hex").textContent = data.colors.east;
+
+          updateFavicon(data.colors);
 
           // Update timestamp info
           document.getElementById("timestamp").textContent =
