@@ -11,6 +11,10 @@ import { z } from "zod";
 // Load configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
+// Intervals already read from disk for the history page, keyed by date folder.
+// A day is dropped from here whenever a new reading is saved into it.
+const recentDayCache = new Map();
+
 // Track if an update is currently in progress
 let updateInProgress = false;
 
@@ -540,6 +544,7 @@ async function updateCacheFiles() {
     const filePath = path.join(dateFolderPath, timeFilename);
     fs.writeFileSync(filePath, JSON.stringify(colorData, null, 2));
     console.log(`Saved color data to ${dateFolder}/${timeFilename}`);
+    recentDayCache.delete(dateFolder);
 
     console.log("Cache update completed successfully");
   } catch (err) {
@@ -949,6 +954,16 @@ function generateRecentData() {
   for (const dateFolder of dateFolders) {
     const dateFolderPath = path.join(dataDir, dateFolder);
 
+    // Reuse this day's intervals if they were already read from disk
+    const cachedIntervals = recentDayCache.get(dateFolder);
+    if (cachedIntervals) {
+      allIntervals.push(...cachedIntervals);
+      totalIntervals += cachedIntervals.length;
+      continue;
+    }
+
+    const dayIntervals = [];
+
     try {
       // Get all time files in this date folder
       const timeFiles = fs
@@ -988,15 +1003,17 @@ function generateRecentData() {
 
         const timestamp = utcDate.getTime() + nycOffset;
 
-        allIntervals.push({
+        dayIntervals.push({
           date: dateFolder,
           time: timeStr,
           colors: data,
           timestamp
         });
-
-        totalIntervals++;
       }
+
+      recentDayCache.set(dateFolder, dayIntervals);
+      allIntervals.push(...dayIntervals);
+      totalIntervals += dayIntervals.length;
     } catch (error) {
       console.error(`Error reading date folder ${dateFolder}:`, error);
       continue;
@@ -1416,4 +1433,11 @@ app.delete("/mcp", (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
+
+  // Read the history data once up front so the first /history visit is fast
+  try {
+    generateRecentData();
+  } catch (error) {
+    console.error("Failed to warm history data:", error);
+  }
 });
